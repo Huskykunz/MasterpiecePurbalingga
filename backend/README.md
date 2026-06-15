@@ -115,4 +115,4 @@ For production, consider:
 5. Use a CDN for image delivery
 
 ## License
-Masterpiece Purbalingga © 2025
+Masterpiece Purbalingga © 2026
