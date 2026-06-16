@@ -1,6 +1,14 @@
 import { createContext, useContext, useState, ReactNode, useRef } from "react";
 import { toast } from "sonner";
 import { CartItem, Product } from "../types";
+import { getDiscountedPrice } from "../utils/priceUtils";
+
+// Stock check injected at runtime to avoid circular imports.
+// Set by StockProvider after mount via setCartStockGetter().
+let externalGetStock: ((id: string) => number) | null = null;
+export function setCartStockGetter(fn: (id: string) => number) {
+  externalGetStock = fn;
+}
 
 interface CartContextType {
   cart: CartItem[];
@@ -18,113 +26,93 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const lastToastTime = useRef<number>(0);
   const currentToastId = useRef<string | number | undefined>(undefined);
+  const COOLDOWN = 1000;
 
-  const addToCart = (product: Product, isAuthenticated: boolean = false): boolean => {
+  const addToCart = (product: Product, isAuthenticated = false): boolean => {
     const now = Date.now();
-    const TOAST_COOLDOWN = 1000; // 1 second cooldown between toasts
 
-    // Check if user is authenticated
     if (!isAuthenticated) {
-      // Only show auth toast if cooldown has passed
-      if (now - lastToastTime.current >= TOAST_COOLDOWN) {
-        // Dismiss previous toast if it exists
-        if (currentToastId.current !== undefined) {
-          toast.dismiss(currentToastId.current);
-        }
-
-        currentToastId.current = toast.warning("Silakan buat akun terlebih dahulu", {
-          description: "Anda perlu masuk atau mendaftar untuk menambahkan produk ke keranjang",
-          action: {
-            label: "Login",
-            onClick: () => {
-              window.location.href = "/login";
-            },
-          },
+      if (now - lastToastTime.current >= COOLDOWN) {
+        if (currentToastId.current !== undefined) toast.dismiss(currentToastId.current);
+        currentToastId.current = toast.warning("Silakan masuk terlebih dahulu", {
+          description: "Login atau daftar untuk menambahkan produk ke keranjang",
+          action: { label: "Login", onClick: () => { window.location.href = "/login"; } },
         });
         lastToastTime.current = now;
       }
       return false;
     }
 
-    // Add product to cart
-    setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.id === product.id);
-      if (existingItem) {
-        return prevCart.map((item) =>
-          item.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
-            : item
-        );
+    // ── Stock check ────────────────────────────────────────────────
+    const availableStock = externalGetStock ? externalGetStock(product.id) : (product.stock ?? Infinity);
+    const inCart = cart.find(i => i.id === product.id)?.quantity ?? 0;
+
+    if (availableStock === 0) {
+      toast.error("Stok habis", { description: `${product.name} sudah tidak tersedia` });
+      return false;
+    }
+    if (inCart >= availableStock) {
+      toast.error("Stok tidak mencukupi", { description: `Maksimal ${availableStock} unit untuk produk ini` });
+      return false;
+    }
+
+    // ── Lock the discounted price at the time of adding ────────────
+    const { finalPrice, hasDiscount } = getDiscountedPrice(product);
+    const effectivePrice = hasDiscount ? finalPrice : product.price;
+
+    setCart(prev => {
+      const existing = prev.find(i => i.id === product.id);
+      if (existing) {
+        return prev.map(i => i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [...prevCart, { ...product, quantity: 1 }];
+      return [...prev, { ...product, price: effectivePrice, quantity: 1 }];
     });
 
-    // Show success notification with cooldown
-    if (now - lastToastTime.current >= TOAST_COOLDOWN) {
-      // Dismiss previous toast if it exists
-      if (currentToastId.current !== undefined) {
-        toast.dismiss(currentToastId.current);
-      }
-
-      currentToastId.current = toast.success("Produk berhasil ditambahkan ke keranjang", {
-        description: `${product.name} telah ditambahkan`,
-        duration: 2000, // Auto-dismiss after 2 seconds
+    if (now - lastToastTime.current >= COOLDOWN) {
+      if (currentToastId.current !== undefined) toast.dismiss(currentToastId.current);
+      currentToastId.current = toast.success("Ditambahkan ke keranjang", {
+        description: `${product.name}${hasDiscount ? ` (harga diskon diterapkan)` : ""}`,
+        duration: 2000,
       });
       lastToastTime.current = now;
     }
-
     return true;
   };
 
   const removeFromCart = (productId: string) => {
-    setCart((prevCart) => prevCart.filter((item) => item.id !== productId));
+    setCart(prev => prev.filter(i => i.id !== productId));
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
+    if (quantity <= 0) { removeFromCart(productId); return; }
+
+    // Stock check on quantity update
+    if (externalGetStock) {
+      const available = externalGetStock(productId);
+      if (quantity > available) {
+        toast.error("Stok tidak mencukupi", { description: `Maksimal ${available} unit tersedia` });
+        return;
+      }
     }
-    setCart((prevCart) =>
-      prevCart.map((item) =>
-        item.id === productId ? { ...item, quantity } : item
-      )
-    );
+
+    setCart(prev => prev.map(i => i.id === productId ? { ...i, quantity } : i));
   };
 
-  const clearCart = () => {
-    setCart([]);
-  };
+  const clearCart = () => setCart([]);
 
-  const getTotalPrice = () => {
-    return cart.reduce((total, item) => total + item.price * item.quantity, 0);
-  };
-
-  const getItemCount = () => {
-    return cart.reduce((total, item) => total + item.quantity, 0);
-  };
+  // Subtotal uses the locked effectivePrice stored in each CartItem
+  const getTotalPrice = () => cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
+  const getItemCount = () => cart.reduce((sum, i) => sum + i.quantity, 0);
 
   return (
-    <CartContext.Provider
-      value={{
-        cart,
-        addToCart,
-        removeFromCart,
-        updateQuantity,
-        clearCart,
-        getTotalPrice,
-        getItemCount,
-      }}
-    >
+    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, getTotalPrice, getItemCount }}>
       {children}
     </CartContext.Provider>
   );
 }
 
 export function useCart() {
-  const context = useContext(CartContext);
-  if (context === undefined) {
-    throw new Error("useCart must be used within a CartProvider");
-  }
-  return context;
+  const ctx = useContext(CartContext);
+  if (!ctx) throw new Error("useCart must be used within a CartProvider");
+  return ctx;
 }

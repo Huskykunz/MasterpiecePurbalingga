@@ -139,9 +139,11 @@ export function Header() {
                   ))}
 
                   <div className="border-t border-white/10 mt-1 pt-1">
-                    <Link to="/seller-signup" onClick={() => setUserDropOpen(false)} className="flex items-center gap-3 px-4 py-2 text-sm text-blue-400 hover:text-blue-300 hover:bg-white/5 transition-colors">
-                      <Briefcase className="h-4 w-4" /> Jual di Sini
-                    </Link>
+                    {user.role !== "craftsman" && (
+                      <Link to="/seller-signup" onClick={() => setUserDropOpen(false)} className="flex items-center gap-3 px-4 py-2 text-sm text-blue-400 hover:text-blue-300 hover:bg-white/5 transition-colors">
+                        <Briefcase className="h-4 w-4" /> Jual di Sini
+                      </Link>
+                    )}
                     <button onClick={handleLogout} className="flex items-center gap-3 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-white/5 transition-colors w-full text-left">
                       <LogOut className="h-4 w-4" /> Keluar
                     </button>
@@ -201,7 +203,7 @@ export function Header() {
                     { to: "/account?tab=orders", label: "Pesanan", icon: Package },
                     { to: "/account?tab=chat", label: "Chat", icon: MessageCircle },
                     { to: "/account?tab=returns", label: "Pengembalian", icon: RotateCcw },
-                    { to: "/seller-signup", label: "Jual di Sini", icon: Briefcase },
+                    ...(user.role !== "craftsman" ? [{ to: "/seller-signup", label: "Jual di Sini", icon: Briefcase }] : []),
                   ].map(({ to, label, icon: Icon }) => (
                     <Link key={to} to={to} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
                       <Icon className="h-4 w-4" /> {label}

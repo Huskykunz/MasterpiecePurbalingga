@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { sellers } from "../data/sellers";
 
 interface User {
   id: string;
@@ -17,39 +18,63 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ── SHA-256 via Web Crypto (browser-native, no library needed) ───────────────
+async function hashPassword(plain: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plain);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// Seed the registeredUsers store with all demo + seller accounts (hashed) if not already done.
+// We use a versioned key so re-hashing happens if we update the seed list.
+const SEED_VERSION = "v3-hashed";
+async function ensureSeedAccounts() {
+  if (localStorage.getItem("accountSeedVersion") === SEED_VERSION) return;
+
+  const plainAccounts = [
+    { id: "demo-1",   name: "Demo User",           email: "demo@masterpiece.com",     password: "demo123",     role: "customer" },
+    { id: "demo-2",   name: "Test Customer",        email: "customer@test.com",        password: "customer123", role: "customer" },
+    { id: "admin-1",  name: "Admin Masterpiece",    email: "admin@masterpiece.com",    password: "admin123",    role: "admin" },
+    // Sellers from sellers.ts
+    ...sellers.map(s => ({ id: s.id, name: s.name, email: s.email, password: s.password, role: s.role })),
+  ];
+
+  const existing: any[] = JSON.parse(localStorage.getItem("registeredUsers") || "[]");
+  const existingIds = new Set(existing.map((u: any) => u.id));
+  const existingEmails = new Set(existing.map((u: any) => u.email));
+
+  const toAdd = plainAccounts.filter(a => !existingIds.has(a.id) && !existingEmails.has(a.email));
+
+  const hashed = await Promise.all(
+    toAdd.map(async a => ({ ...a, password: await hashPassword(a.password) }))
+  );
+
+  // Also hash any existing accounts that still store plaintext passwords (migration).
+  const migrated = await Promise.all(
+    existing.map(async (u: any) => {
+      // Heuristic: SHA-256 hex is always 64 chars. If shorter, it's plaintext.
+      if (u.password && u.password.length < 64) {
+        return { ...u, password: await hashPassword(u.password) };
+      }
+      return u;
+    })
+  );
+
+  localStorage.setItem("registeredUsers", JSON.stringify([...migrated, ...hashed]));
+  localStorage.setItem("accountSeedVersion", SEED_VERSION);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
-    // Load user from localStorage on initial render
-    const savedUser = localStorage.getItem("user");
-    return savedUser ? JSON.parse(savedUser) : null;
+    const saved = localStorage.getItem("user");
+    return saved ? JSON.parse(saved) : null;
   });
 
-  // Initialize demo accounts on first load
-  useEffect(() => {
-    const registeredUsers = localStorage.getItem("registeredUsers");
-    if (!registeredUsers) {
-      // Create demo accounts
-      const demoAccounts = [
-        {
-          id: "demo-1",
-          name: "Demo User",
-          email: "demo@masterpiece.com",
-          password: "demo123",
-          role: "customer",
-        },
-        {
-          id: "demo-2",
-          name: "Test Customer",
-          email: "customer@test.com",
-          password: "customer123",
-          role: "customer",
-        },
-      ];
-      localStorage.setItem("registeredUsers", JSON.stringify(demoAccounts));
-    }
-  }, []);
+  // Run seed on mount (async, safe to run every time — version guard prevents duplicates)
+  useEffect(() => { ensureSeedAccounts(); }, []);
 
-  // Save user to localStorage whenever it changes
   useEffect(() => {
     if (user) {
       localStorage.setItem("user", JSON.stringify(user));
@@ -59,73 +84,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user]);
 
   const login = async (email: string, password: string) => {
-    // Simulasi login - nanti bisa diganti dengan API call
-    // Simulasi delay untuk meniru API call
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    // Check if user exists in localStorage (registered users)
-    const registeredUsers = JSON.parse(localStorage.getItem("registeredUsers") || "[]");
-    const existingUser = registeredUsers.find((u: any) => u.email === email);
-
-    if (existingUser && existingUser.password === password) {
-      const { password: _, ...userWithoutPassword } = existingUser;
-      setUser(userWithoutPassword);
-    } else {
-      throw new Error("Invalid credentials");
-    }
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const hashed = await hashPassword(password);
+    const registeredUsers: any[] = JSON.parse(localStorage.getItem("registeredUsers") || "[]");
+    const found = registeredUsers.find(u => u.email === email && u.password === hashed);
+    if (!found) throw new Error("Invalid credentials");
+    const { password: _pw, ...userWithoutPassword } = found;
+    setUser(userWithoutPassword as User);
   };
 
   const register = async (name: string, email: string, password: string) => {
-    // Simulasi register - nanti bisa diganti dengan API call
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, 300));
+    const registeredUsers: any[] = JSON.parse(localStorage.getItem("registeredUsers") || "[]");
+    if (registeredUsers.some(u => u.email === email)) throw new Error("Email already registered");
 
-    // Check if email already exists
-    const registeredUsers = JSON.parse(localStorage.getItem("registeredUsers") || "[]");
-    const emailExists = registeredUsers.some((u: any) => u.email === email);
-
-    if (emailExists) {
-      throw new Error("Email already registered");
-    }
-
-    const newUser: User = {
-      id: Date.now().toString(),
-      name,
-      email,
-      role: "customer",
-    };
-
-    // Save to registered users with password
-    const userWithPassword = { ...newUser, password };
-    registeredUsers.push(userWithPassword);
+    const newUser: User = { id: Date.now().toString(), name, email, role: "customer" };
+    const hashed = await hashPassword(password);
+    registeredUsers.push({ ...newUser, password: hashed });
     localStorage.setItem("registeredUsers", JSON.stringify(registeredUsers));
-
-    // Set as current user (without password)
     setUser(newUser);
   };
 
-  const logout = () => {
-    setUser(null);
-  };
+  const logout = () => setUser(null);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isAuthenticated: !!user,
-        login,
-        logout,
-        register,
-      }}
-    >
+    <AuthContext.Provider value={{ user, isAuthenticated: !!user, login, logout, register }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within an AuthProvider");
+  return ctx;
 }

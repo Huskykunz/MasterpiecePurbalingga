@@ -60,7 +60,7 @@ export default function Complaint() {
     createComplaint(
       user.id,
       user.name,
-      formData.orderId || undefined,
+      (formData.orderId && formData.orderId !== "none") ? formData.orderId : undefined,
       formData.category,
       formData.subject,
       formData.description
@@ -122,7 +122,7 @@ export default function Complaint() {
                     <SelectValue placeholder="Pilih pesanan terkait (jika ada)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Tidak terkait pesanan</SelectItem>
+                    <SelectItem value="none">Tidak terkait pesanan</SelectItem>
                     {userOrders.map((order) => (
                       <SelectItem key={order.id} value={order.id}>
                         {order.id} - {new Date(order.createdAt).toLocaleDateString("id-ID")}

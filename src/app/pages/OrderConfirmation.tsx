@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { CheckCircle, Package, MapPin, CreditCard, Home, FileText } from "lucide-react";
+import { CheckCircle, Package, MapPin, CreditCard, Home, FileText, Receipt } from "lucide-react";
 
 export default function OrderConfirmation() {
   const { orderId } = useParams();
@@ -180,10 +180,16 @@ export default function OrderConfirmation() {
               Kembali ke Beranda
             </Button>
           </Link>
+          <Link to={`/invoice/${order.id}`} className="flex-1">
+            <Button variant="outline" className="w-full border-blue-200 text-blue-600 hover:bg-blue-50" size="lg">
+              <Receipt className="mr-2 h-5 w-5" />
+              Lihat Invoice
+            </Button>
+          </Link>
           <Link to="/orders" className="flex-1">
             <Button className="w-full" size="lg">
               <FileText className="mr-2 h-5 w-5" />
-              Lihat Semua Pesanan
+              Semua Pesanan
             </Button>
           </Link>
         </div>

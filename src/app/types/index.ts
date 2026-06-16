@@ -1,9 +1,27 @@
+export interface ProductVariation {
+  id: string;
+  attribute: string;   // e.g. "Ukuran", "Warna", "Material"
+  name: string;        // e.g. "Large", "Hitam", "Titanium"
+  priceAdjustment: number; // positive = surcharge, negative = discount
+  stock: number;
+  sku: string;
+}
+
+export interface ProductDiscount {
+  type: "percentage" | "fixed";
+  value: number;          // e.g. 20 (20%) or 50000 (Rp 50.000)
+  label?: string;         // e.g. "Promo Lebaran"
+  expiresAt?: string;     // ISO date string
+}
+
 export interface Product {
   id: string;
   name: string;
   description: string;
   price: number;
   image: string;
+  images?: string[];           // additional images
+  sku?: string;
   category: string;
   inStock: boolean;
   stock?: number;
@@ -11,6 +29,8 @@ export interface Product {
   reviewCount?: number;
   sellerId?: string;
   sellerName?: string;
+  variations?: ProductVariation[];
+  discount?: ProductDiscount;
 }
 
 export interface Seller {
@@ -30,6 +50,7 @@ export interface Seller {
 
 export interface CartItem extends Product {
   quantity: number;
+  selectedVariation?: ProductVariation;
 }
 
 export interface Review {

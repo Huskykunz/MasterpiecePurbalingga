@@ -1,4 +1,5 @@
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
+import { useAuth } from "./context/AuthContext";
 import Root from "./pages/Root";
 import Home from "./pages/Home";
 import Shop from "./pages/Shop";
@@ -19,7 +20,22 @@ import CraftsmanDashboard from "./pages/CraftsmanDashboard";
 import DesignVisualizer from "./pages/AIVisualizer";
 import SellerSignup from "./pages/SellerSignup";
 import AccountPage from "./pages/AccountPage";
+import Invoice from "./pages/Invoice";
 import NotFound from "./pages/NotFound";
+
+// ── Role-based guard ─────────────────────────────────────────────────────────
+function ProtectedRoute({
+  children,
+  requiredRole,
+}: {
+  children: React.ReactNode;
+  requiredRole: "admin" | "craftsman";
+}) {
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.role !== requiredRole) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
 
 export const router = createBrowserRouter([
   {
@@ -39,12 +55,27 @@ export const router = createBrowserRouter([
       { path: "register", Component: Register },
       { path: "profile", Component: Profile },
       { path: "account", Component: AccountPage },
+      { path: "invoice/:orderId", Component: Invoice },
       { path: "complaint", Component: Complaint },
       { path: "complaints", Component: Complaints },
       { path: "ai-visualizer", Component: DesignVisualizer },
       { path: "seller-signup", Component: SellerSignup },
-      { path: "admin", Component: AdminDashboard },
-      { path: "craftsman", Component: CraftsmanDashboard },
+      {
+        path: "admin",
+        Component: () => (
+          <ProtectedRoute requiredRole="admin">
+            <AdminDashboard />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "craftsman",
+        Component: () => (
+          <ProtectedRoute requiredRole="craftsman">
+            <CraftsmanDashboard />
+          </ProtectedRoute>
+        ),
+      },
       { path: "*", Component: NotFound },
     ],
   },

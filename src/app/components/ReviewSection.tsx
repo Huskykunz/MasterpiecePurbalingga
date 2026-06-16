@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useReviews } from "../context/ReviewContext";
+import { useOrders } from "../context/OrderContext";
 import { StarRating } from "./StarRating";
 import { Button } from "./ui/button";
 import { Textarea } from "./ui/textarea";
@@ -16,6 +17,7 @@ interface ReviewSectionProps {
 export function ReviewSection({ productId }: ReviewSectionProps) {
   const { isAuthenticated, user } = useAuth();
   const { getProductReviews, addReview, getProductRating } = useReviews();
+  const { getUserOrders } = useOrders();
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
@@ -34,13 +36,15 @@ export function ReviewSection({ productId }: ReviewSectionProps) {
       return;
     }
 
+    const deliveredOrders = getUserOrders(user.id).filter(o => o.status === "delivered");
+
     addReview({
       productId,
       userId: user.id,
       userName: user.name,
       rating,
       comment: comment.trim(),
-    });
+    }, deliveredOrders);
 
     toast.success("Ulasan berhasil ditambahkan!");
     setShowReviewForm(false);

@@ -1,9 +1,10 @@
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
-import { products } from "../data/products";
+import { useProducts } from "../hooks/useProducts";
 import { ProductCard } from "../components/ProductCard";
-import { ArrowRight, Star, Shield, HeadphonesIcon, ChevronLeft, ChevronRight, Sparkles, Store, TrendingUp, Users } from "lucide-react";
+import { ArrowRight, Star, Shield, HeadphonesIcon, ChevronLeft, ChevronRight, Sparkles, Store, TrendingUp, Users, BarChart2 } from "lucide-react";
 import { AIChatbot } from "../components/AIChatbot";
+import { useAuth } from "../context/AuthContext";
 import { useState, useCallback } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
@@ -37,7 +38,13 @@ const heroSlides = [
 ];
 
 export default function Home() {
-  const featuredProducts = products.slice(0, 4);
+  const { user } = useAuth();
+  const isSeller = user?.role === "craftsman";
+  const allProducts = useProducts();
+  const featuredProducts = allProducts
+    .filter(p => p.inStock)
+    .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    .slice(0, 4);
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true }, [Autoplay({ delay: 5000 })]);
 
   const scrollPrev = useCallback(() => {
@@ -58,39 +65,38 @@ export default function Home() {
         <div className="absolute inset-0 bg-gradient-to-br from-blue-900/30 via-transparent to-indigo-900/20 pointer-events-none" />
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="container mx-auto px-4 py-14 md:py-24 relative">
+        <div className="container mx-auto px-4 py-6 md:py-16 relative">
           <div className="relative">
             <div className="overflow-hidden rounded-2xl" ref={emblaRef}>
               <div className="flex">
                 {heroSlides.map((slide, index) => (
                   <div key={index} className="flex-[0_0_100%] min-w-0 px-1">
                     {/* Glassmorphism slide card */}
-                    <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6 md:p-10 shadow-2xl">
-                      <div className="flex flex-col md:flex-row items-center gap-8">
-                        {/* Product image with glass frame */}
+                    <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 sm:p-6 md:p-10 shadow-2xl">
+                      <div className="flex flex-col md:flex-row items-center gap-4 md:gap-8">
+                        {/* Product image */}
                         <div className="w-full md:w-1/2 relative">
                           <div className="absolute inset-0 bg-blue-500/10 rounded-2xl blur-xl" />
                           <img
                             src={slide.image}
                             alt={slide.title}
-                            className="relative w-full h-72 md:h-96 object-cover rounded-xl shadow-2xl ring-1 ring-white/10 hover:scale-[1.02] transition-transform duration-500"
+                            className="relative w-full h-44 sm:h-64 md:h-96 object-cover rounded-xl shadow-2xl ring-1 ring-white/10"
                           />
-                          {/* Glass badge on image */}
-                          <div className="absolute top-3 left-3 bg-black/40 backdrop-blur-sm border border-white/10 rounded-lg px-3 py-1 text-xs text-white/80">
+                          <div className="absolute top-3 left-3 bg-black/40 backdrop-blur-sm border border-white/10 rounded-lg px-2.5 py-1 text-xs text-white/80">
                             Produk Unggulan
                           </div>
                         </div>
 
                         {/* Text content */}
                         <div className="w-full md:w-1/2 text-center md:text-left">
-                          <p className="text-blue-400 text-sm tracking-widest uppercase mb-3">Masterpiece Purbalingga</p>
-                          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4 leading-tight">{slide.title}</h2>
-                          <p className="text-base md:text-lg mb-6 text-gray-400">{slide.description}</p>
-                          <p className="text-4xl md:text-5xl mb-8 text-amber-400 font-bold">{slide.price}</p>
+                          <p className="text-blue-400 text-xs tracking-widest uppercase mb-2">Masterpiece Purbalingga</p>
+                          <h2 className="text-xl sm:text-3xl md:text-4xl font-bold text-white mb-2 leading-tight">{slide.title}</h2>
+                          <p className="text-sm md:text-lg mb-3 text-gray-400 hidden sm:block">{slide.description}</p>
+                          <p className="text-2xl sm:text-4xl md:text-5xl mb-4 md:mb-8 text-amber-400 font-bold">{slide.price}</p>
                           <Link to="/shop">
-                            <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white border-0 shadow-lg shadow-blue-900/40">
+                            <Button size="sm" className="bg-blue-600 hover:bg-blue-500 text-white border-0 shadow-lg shadow-blue-900/40 md:text-base md:h-11 md:px-6">
                               Belanja Sekarang
-                              <ArrowRight className="ml-2 h-5 w-5" />
+                              <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                           </Link>
                         </div>
@@ -106,7 +112,7 @@ export default function Home() {
               {heroSlides.map((slide, index) => (
                 <div
                   key={index}
-                  className="flex-shrink-0 flex items-center gap-3 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-3 min-w-[200px] hover:bg-white/10 transition-colors cursor-pointer"
+                  className="flex-shrink-0 flex items-center gap-2.5 bg-white/5 backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2.5 min-w-[150px] sm:min-w-[190px] hover:bg-white/10 transition-colors cursor-pointer"
                   onClick={() => emblaApi?.scrollTo(index)}
                 >
                   <img src={slide.image} alt={slide.title} className="w-10 h-10 rounded-lg object-cover ring-1 ring-white/10" />
@@ -290,10 +296,12 @@ export default function Home() {
                   </span>
                 </div>
                 <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-                  Jual Produk Knalpot Anda di Sini
+                  {isSeller ? "Pantau Performa Toko Anda" : "Jual Produk Knalpot Anda di Sini"}
                 </h2>
                 <p className="text-gray-400 mb-8 leading-relaxed">
-                  Bergabunglah dengan platform marketplace knalpot terbesar di Purbalingga. Dapatkan akses ke ribuan pelanggan potensial!
+                  {isSeller
+                    ? "Lihat statistik penjualan, ulasan pembeli, dan kelola stok produk Anda langsung dari dashboard penjual."
+                    : "Bergabunglah dengan platform marketplace knalpot terbesar di Purbalingga. Dapatkan akses ke ribuan pelanggan potensial!"}
                 </p>
                 <div className="flex flex-wrap gap-4 mb-8 justify-center md:justify-start">
                   {[
@@ -309,12 +317,21 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-                <Link to="/seller-signup">
-                  <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/40">
-                    Daftar Sebagai Penjual
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Button>
-                </Link>
+                {isSeller ? (
+                  <Link to="/account?tab=seller-stats">
+                    <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/40">
+                      <BarChart2 className="mr-2 h-5 w-5" />
+                      Statistik Penjualan
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link to="/seller-signup">
+                    <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/40">
+                      Daftar Sebagai Penjual
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                    </Button>
+                  </Link>
+                )}
               </div>
               <div className="flex-1 grid grid-cols-2 gap-4 w-full">
                 {[

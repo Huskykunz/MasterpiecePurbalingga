@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Star, X } from "lucide-react";
+import { Star, X, ShieldCheck } from "lucide-react";
 import { useReviews } from "../context/ReviewContext";
 import { useAuth } from "../context/AuthContext";
+import { useOrders } from "../context/OrderContext";
 import { toast } from "sonner";
 
 interface Props {
@@ -13,21 +14,31 @@ interface Props {
 export function ReviewModal({ productId, productName, onClose }: Props) {
   const { addReview, getProductReviews } = useReviews();
   const { user } = useAuth();
+  const { getUserOrders } = useOrders();
   const [rating, setRating] = useState(5);
   const [hover, setHover] = useState(0);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const alreadyReviewed = user
-    ? getProductReviews(productId).some((r) => r.userId === user.id)
+    ? getProductReviews(productId).some(r => r.userId === user.id)
     : false;
+
+  // Find user's delivered orders to pass to addReview for verification
+  const deliveredOrders = user
+    ? getUserOrders(user.id).filter(o => o.status === "delivered")
+    : [];
+
+  const isVerifiedPurchase = deliveredOrders.some(o =>
+    o.items.some(i => i.id === productId)
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
     if (!comment.trim()) { toast.error("Tuliskan ulasan Anda"); return; }
     setSubmitting(true);
-    addReview({ productId, userId: user.id, userName: user.name, rating, comment });
+    addReview({ productId, userId: user.id, userName: user.name, rating, comment }, deliveredOrders);
     toast.success("Ulasan berhasil dikirim!");
     onClose();
   };
@@ -58,18 +69,23 @@ export function ReviewModal({ productId, productName, onClose }: Props) {
           <div>
             <p className="text-sm text-gray-500 mb-1">Produk</p>
             <p className="font-medium text-gray-900 text-sm">{productName}</p>
+            {isVerifiedPurchase ? (
+              <div className="flex items-center gap-1.5 mt-1.5 text-green-600">
+                <ShieldCheck className="h-3.5 w-3.5" />
+                <span className="text-xs font-medium">Pembelian Terverifikasi</span>
+              </div>
+            ) : (
+              <p className="text-xs text-amber-600 mt-1.5">⚠ Ulasan tidak terverifikasi — produk belum pernah dibeli</p>
+            )}
           </div>
 
           <div>
             <p className="text-sm text-gray-700 font-medium mb-2">Rating</p>
             <div className="flex gap-1">
-              {[1,2,3,4,5].map((s) => (
-                <button
-                  key={s} type="button"
+              {[1,2,3,4,5].map(s => (
+                <button key={s} type="button"
                   onMouseEnter={() => setHover(s)} onMouseLeave={() => setHover(0)}
-                  onClick={() => setRating(s)}
-                  className="transition-transform hover:scale-110"
-                >
+                  onClick={() => setRating(s)} className="transition-transform hover:scale-110">
                   <Star className={`h-8 w-8 ${(hover || rating) >= s ? "fill-amber-400 text-amber-400" : "text-gray-200 fill-gray-100"}`} />
                 </button>
               ))}
@@ -81,13 +97,10 @@ export function ReviewModal({ productId, productName, onClose }: Props) {
 
           <div>
             <label className="text-sm text-gray-700 font-medium block mb-1.5">Ulasan</label>
-            <textarea
-              value={comment} onChange={(e) => setComment(e.target.value)}
+            <textarea value={comment} onChange={e => setComment(e.target.value)}
               placeholder="Bagikan pengalaman Anda dengan produk ini..."
-              rows={4}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-blue-400 bg-gray-50 focus:bg-white"
-              required
-            />
+              rows={4} required
+              className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-blue-400 bg-gray-50 focus:bg-white" />
           </div>
 
           <div className="flex gap-3">

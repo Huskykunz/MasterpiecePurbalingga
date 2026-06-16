@@ -9,6 +9,10 @@ import { ComplaintProvider } from "./context/ComplaintContext";
 import { ChatProvider } from "./context/ChatContext";
 import { RestockProvider } from "./context/RestockContext";
 import { ReturnProvider } from "./context/ReturnContext";
+import { StockProvider } from "./context/StockContext";
+import { SellerProductProvider } from "./context/SellerProductContext";
+import { AddressProvider } from "./context/AddressContext";
+import { CouponProvider } from "./context/CouponContext";
 import { router } from "./routes";
 import { useEffect } from "react";
 import { initializeSellers } from "./data/sellers";
@@ -20,11 +24,15 @@ function AppInit({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <CouponProvider>
+    <AddressProvider>
     <AuthProvider>
-      <ReviewProvider>
-        <OrderProvider>
+      <OrderProvider>
+        <ReviewProvider>
           <ComplaintProvider>
             <CartProvider>
+              <SellerProductProvider>
+              <StockProvider>
               <ChatProvider>
                 <RestockProvider>
                   <ReturnProvider>
@@ -40,10 +48,14 @@ export default function App() {
                   </ReturnProvider>
                 </RestockProvider>
               </ChatProvider>
+              </StockProvider>
+              </SellerProductProvider>
             </CartProvider>
           </ComplaintProvider>
-        </OrderProvider>
-      </ReviewProvider>
+        </ReviewProvider>
+      </OrderProvider>
     </AuthProvider>
+    </AddressProvider>
+    </CouponProvider>
   );
 }
