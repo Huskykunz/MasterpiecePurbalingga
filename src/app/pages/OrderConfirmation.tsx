@@ -154,18 +154,41 @@ export default function OrderConfirmation() {
                 </div>
               ))}
 
-              <div className="pt-4 border-t space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Subtotal</span>
-                  <span>{formatPrice(order.total - 15000)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Ongkos Kirim</span>
-                  <span>{formatPrice(15000)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-lg pt-2 border-t">
-                  <span>Total</span>
-                  <span className="text-blue-600">{formatPrice(order.total)}</span>
+              <div className="pt-4 border-t space-y-2 text-sm">
+                {order.subtotal !== undefined ? (
+                  <>
+                    <div className="flex justify-between text-gray-600">
+                      <span>Subtotal Produk</span>
+                      <span>{formatPrice(order.subtotal)}</span>
+                    </div>
+                    {order.serviceFee !== undefined && (
+                      <div className="flex justify-between text-gray-600">
+                        <span>Biaya Layanan ({order.serviceFeeRate ?? 10}%)</span>
+                        <span>{formatPrice(order.serviceFee)}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-gray-600">
+                      <span>Ongkos Kirim</span>
+                      <span className={order.shippingCost === 0 ? "text-green-600 font-medium" : ""}>
+                        {order.shippingCost === 0 ? "Gratis" : formatPrice(order.shippingCost ?? 15000)}
+                      </span>
+                    </div>
+                    {order.discountAmount !== undefined && order.discountAmount > 0 && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Diskon Kupon</span>
+                        <span className="font-medium">−{formatPrice(order.discountAmount)}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex justify-between text-gray-600">
+                    <span>Subtotal</span>
+                    <span>{formatPrice(order.total)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-base pt-2 border-t">
+                  <span>Total Bayar</span>
+                  <span className="text-blue-600 text-lg">{formatPrice(order.total)}</span>
                 </div>
               </div>
             </CardContent>

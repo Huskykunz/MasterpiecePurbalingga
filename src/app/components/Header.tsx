@@ -1,9 +1,10 @@
 import { Link, useNavigate, useLocation } from "react-router";
 import {
-  ShoppingCart, Store, Menu, X, User, LogOut,
+  ShoppingCart, Menu, X, User, LogOut,
   Package, Briefcase, ChevronDown, MessageCircle,
   RotateCcw, Info, Phone, Sparkles
 } from "lucide-react";
+import logoMP from "@/imports/MP_logo.png";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useState, useRef, useEffect } from "react";
@@ -44,16 +45,18 @@ export function Header() {
       : "text-gray-400 hover:text-white";
 
   return (
-    <header className="w-full bg-[#111318] border-b border-white/5 shadow-lg sticky top-0 z-50">
+    <header className="w-full bg-[#0d1b2e] border-b border-white/5 shadow-lg sticky top-0 z-50">
       {/* Three-column grid so nav is always perfectly centered */}
       <div className="container mx-auto grid grid-cols-[1fr_auto_1fr] h-14 items-center px-4 gap-4">
 
         {/* Logo — left column */}
         <Link to="/" className="flex items-center gap-2.5 justify-self-start">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center shadow-md flex-shrink-0">
-            <Store className="h-4 w-4 text-white" />
-          </div>
-          <span className="text-white font-semibold text-sm tracking-wide hidden sm:block">
+          <img
+            src={logoMP}
+            alt="Masterpiece Purbalingga"
+            className="flex-shrink-0 h-9 w-auto object-contain rounded-md"
+          />
+          <span className="text-blue-400 font-semibold text-sm tracking-wide hidden sm:block">
             Masterpiece <span className="text-blue-400">Purbalingga</span>
           </span>
           <span className="text-white font-bold text-sm sm:hidden">MP</span>
@@ -172,7 +175,7 @@ export function Header() {
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div className="md:hidden border-t border-white/5 bg-[#15181f]">
+        <div className="md:hidden border-t border-white/5 bg-[#0d1b2e]">
           <div className="container mx-auto px-4 py-3 flex flex-col gap-0.5">
             {[
               { to: "/", label: "Beranda" },

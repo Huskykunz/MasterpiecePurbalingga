@@ -1,21 +1,86 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate, Navigate, useLocation } from "react-router";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
 import { useOrders } from "../context/OrderContext";
 import { useAddress } from "../context/AddressContext";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Textarea } from "../components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { toast } from "sonner";
-import { ShoppingBag, MapPin, CreditCard, ArrowLeft, Package, Zap, CheckCircle2, Plus, Home, Building2, ChevronDown, ChevronUp, Ticket, X } from "lucide-react";
+import {
+  ShoppingBag, MapPin, CreditCard, ArrowLeft, Package, Zap,
+  CheckCircle2, Plus, Home, Building2, ChevronDown, ChevronUp,
+  Ticket, X, Check, AlertCircle, Percent,
+} from "lucide-react";
 import { ShippingAddress, CartItem } from "../types";
 import { useCoupon, Coupon } from "../context/CouponContext";
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
+
+// ── Indonesian provinces ────────────────────────────────────────────────────
+const PROVINCES = [
+  "Aceh", "Sumatera Utara", "Sumatera Barat", "Riau", "Kepulauan Riau",
+  "Jambi", "Sumatera Selatan", "Kepulauan Bangka Belitung", "Bengkulu",
+  "Lampung", "DKI Jakarta", "Jawa Barat", "Banten", "Jawa Tengah",
+  "DI Yogyakarta", "Jawa Timur", "Bali", "Nusa Tenggara Barat",
+  "Nusa Tenggara Timur", "Kalimantan Barat", "Kalimantan Tengah",
+  "Kalimantan Selatan", "Kalimantan Timur", "Kalimantan Utara",
+  "Sulawesi Utara", "Gorontalo", "Sulawesi Tengah", "Sulawesi Barat",
+  "Sulawesi Selatan", "Sulawesi Tenggara", "Maluku", "Maluku Utara",
+  "Papua", "Papua Barat", "Papua Selatan", "Papua Tengah",
+  "Papua Pegunungan", "Papua Barat Daya",
+];
+
+// ── Service fee ─────────────────────────────────────────────────────────────
+function calcServiceFee(subtotal: number): { fee: number; rate: number } {
+  const rate = subtotal < 1_000_000 ? 10 : 5;
+  return { fee: Math.round(subtotal * rate / 100), rate };
+}
+
+// ── Validation helpers ──────────────────────────────────────────────────────
+type FieldKey = "fullName" | "phone" | "address" | "city" | "province" | "postalCode";
+
+const validators: Record<FieldKey, (v: string) => string | null> = {
+  fullName: v => {
+    if (!v) return "Nama wajib diisi";
+    if (v.length < 3) return "Nama minimal 3 karakter";
+    if (/[^a-zA-Z\s]/.test(v)) return "Nama tidak valid — tidak boleh mengandung angka atau simbol";
+    return null;
+  },
+  phone: v => {
+    if (!v) return "Nomor telepon wajib diisi";
+    const digits = v.replace(/\D/g, "");
+    if (!v.startsWith("08") && !v.startsWith("+62")) return "Nomor telepon tidak valid — gunakan format 08xxx atau +62xxx";
+    if (digits.length < 10 || digits.length > 13) return "Nomor telepon tidak valid — gunakan format 08xxx atau +62xxx";
+    return null;
+  },
+  address: v => {
+    if (!v) return "Alamat wajib diisi";
+    if (v.length < 10) return "Alamat terlalu singkat atau tidak masuk akal — mohon isi alamat lengkap";
+    if (/^\d+$/.test(v.trim())) return "Alamat terlalu singkat atau tidak masuk akal — mohon isi alamat lengkap";
+    if (v.trim().split(/\s+/).length < 2) return "Alamat terlalu singkat atau tidak masuk akal — mohon isi alamat lengkap";
+    return null;
+  },
+  city: v => {
+    if (!v) return "Kota wajib diisi";
+    if (v.length < 3) return "Nama kota tidak valid";
+    if (/[^a-zA-Z\s]/.test(v)) return "Nama kota tidak valid";
+    return null;
+  },
+  province: v => {
+    if (!v) return "Provinsi wajib dipilih";
+    return null;
+  },
+  postalCode: v => {
+    if (!v) return "Kode pos wajib diisi";
+    if (!/^\d{5}$/.test(v)) return "Kode pos harus 5 digit angka yang valid";
+    if (v === "00000") return "Kode pos harus 5 digit angka yang valid";
+    return null;
+  },
+};
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -28,14 +93,15 @@ export default function Checkout() {
   const buyNowItems: CartItem[] | undefined = (location.state as any)?.buyNowItems;
   const isBuyNow = Array.isArray(buyNowItems) && buyNowItems.length > 0;
   const activeItems: CartItem[] = isBuyNow ? buyNowItems : cart;
+
   const subtotal = activeItems.reduce((s, i) => s + i.price * i.quantity, 0);
-  const shippingCost = subtotal >= 100000 ? 0 : 15000;
-  const total = subtotal + shippingCost;
+  const { fee: serviceFee, rate: serviceFeeRate } = calcServiceFee(subtotal);
+  const shippingCost = subtotal >= 100_000 ? 0 : 15_000;
+  const baseTotal = subtotal + serviceFee + shippingCost;
 
   const savedAddresses = user ? getUserAddresses(user.id) : [];
   const defaultAddr = savedAddresses.find(a => a.isDefault);
 
-  // selectedAddressId: null = manual form, string = id of saved address
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
     defaultAddr ? defaultAddr.id : null
   );
@@ -43,37 +109,67 @@ export default function Checkout() {
   const [showManual, setShowManual] = useState(savedAddresses.length === 0);
 
   const [shippingData, setShippingData] = useState<ShippingAddress>(() => {
-    if (defaultAddr) return { fullName: defaultAddr.fullName, phone: defaultAddr.phone, address: defaultAddr.address, city: defaultAddr.city, province: defaultAddr.province, postalCode: defaultAddr.postalCode, notes: defaultAddr.notes || "" };
+    if (defaultAddr) return {
+      fullName: defaultAddr.fullName, phone: defaultAddr.phone,
+      address: defaultAddr.address, city: defaultAddr.city,
+      province: defaultAddr.province, postalCode: defaultAddr.postalCode,
+      notes: defaultAddr.notes || "",
+    };
     return { fullName: user?.name || "", phone: "", address: "", city: "", province: "", postalCode: "", notes: "" };
   });
-  const [paymentMethod, setPaymentMethod] = useState("cod");
 
-  // ── Coupon state ────────────────────────────────────────────────
+  // ── Validation state ───────────────────────────────────────────────────────
+  const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({});
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string | null>>>({});
+
+  const validateField = useCallback((key: FieldKey, value: string) => {
+    const err = validators[key](value);
+    setFieldErrors(prev => ({ ...prev, [key]: err }));
+    return err;
+  }, []);
+
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setSelectedAddressId(null);
+    setShippingData(prev => ({ ...prev, [name]: value }));
+    setTouched(prev => ({ ...prev, [name]: true }));
+    const key = name as FieldKey;
+    if (validators[key]) {
+      const err = validateField(key, value);
+      if (err && touched[key]) toast.warning(err, { id: `warn-${key}`, duration: 2500 });
+    }
+  };
+
+  // Field status helpers
+  const isFieldValid = (key: FieldKey) =>
+    touched[key] && !fieldErrors[key] && shippingData[key as keyof ShippingAddress];
+
+  const isFieldError = (key: FieldKey) =>
+    touched[key] && !!fieldErrors[key];
+
+  const isFormValid = (Object.keys(validators) as FieldKey[]).every(
+    k => !validators[k](shippingData[k as keyof ShippingAddress] as string)
+  );
+
+  // ── Coupon state ───────────────────────────────────────────────────────────
+  const [paymentMethod, setPaymentMethod] = useState("cod");
   const { validateCoupon, applyCoupon, calculateDiscount } = useCoupon();
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const discountAmount = appliedCoupon ? calculateDiscount(appliedCoupon, subtotal) : 0;
-  const finalTotal = Math.max(0, total - discountAmount);
+  const finalTotal = Math.max(0, baseTotal - discountAmount);
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (!isBuyNow && cart.length === 0) return <Navigate to="/cart" replace />;
 
   const handleApplyCoupon = () => {
     const result = validateCoupon(couponInput, subtotal);
-    if (!result.valid) {
-      toast.error("Kupon tidak valid", { description: result.error });
-      return;
-    }
+    if (!result.valid) { toast.error("Kupon tidak valid", { description: result.error }); return; }
     setAppliedCoupon(result.coupon!);
     toast.success("Kupon berhasil diterapkan!", {
       description: result.coupon!.description || `Hemat ${fmt(calculateDiscount(result.coupon!, subtotal))}`,
     });
   };
-
-  const handleRemoveCoupon = () => {
-    setAppliedCoupon(null);
-    setCouponInput("");
-  };
-
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
-  if (!isBuyNow && cart.length === 0) return <Navigate to="/cart" replace />;
 
   const handleSelectSaved = (id: string) => {
     const addr = savedAddresses.find(a => a.id === id);
@@ -81,24 +177,38 @@ export default function Checkout() {
     setSelectedAddressId(id);
     setShippingData({ fullName: addr.fullName, phone: addr.phone, address: addr.address, city: addr.city, province: addr.province, postalCode: addr.postalCode, notes: addr.notes || "" });
     setShowManual(false);
-  };
-
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setSelectedAddressId(null); // deselect saved if user edits
-    setShippingData(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  };
-
-  const validate = () => {
-    const required: (keyof ShippingAddress)[] = ["fullName", "phone", "address", "city", "province", "postalCode"];
-    if (required.some(f => !shippingData[f])) { toast.error("Lengkapi semua data pengiriman"); return false; }
-    return true;
+    // Pre-validate all fields from saved address
+    const keys: FieldKey[] = ["fullName", "phone", "address", "city", "province", "postalCode"];
+    const newErrors: Partial<Record<FieldKey, string | null>> = {};
+    const newTouched: Partial<Record<FieldKey, boolean>> = {};
+    keys.forEach(k => {
+      newErrors[k] = validators[k]((addr as any)[k] || "");
+      newTouched[k] = true;
+    });
+    setFieldErrors(newErrors);
+    setTouched(newTouched);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+    // Touch all fields and validate
+    const keys: FieldKey[] = ["fullName", "phone", "address", "city", "province", "postalCode"];
+    const newTouched: Partial<Record<FieldKey, boolean>> = {};
+    const newErrors: Partial<Record<FieldKey, string | null>> = {};
+    let hasError = false;
+    keys.forEach(k => {
+      newTouched[k] = true;
+      const err = validators[k](shippingData[k as keyof ShippingAddress] as string);
+      newErrors[k] = err;
+      if (err) { hasError = true; toast.error(err, { id: `err-${k}` }); }
+    });
+    setTouched(newTouched);
+    setFieldErrors(newErrors);
+    if (hasError) return;
+
     try {
-      const order = createOrder(user!.id, activeItems, finalTotal, shippingData, paymentMethod);
+      const breakdown = { subtotal, serviceFee, serviceFeeRate, shippingCost, discountAmount };
+      const order = createOrder(user!.id, activeItems, finalTotal, shippingData, paymentMethod, breakdown);
       if (appliedCoupon) applyCoupon(appliedCoupon.code);
       if (!isBuyNow) clearCart();
       toast.success("Pesanan berhasil dibuat!", { description: `Nomor pesanan: ${order.id}` });
@@ -109,6 +219,41 @@ export default function Checkout() {
   };
 
   const LabelIcon = (label: string) => label === "Kantor" ? Building2 : Home;
+
+  // ── Field wrapper helper ───────────────────────────────────────────────────
+  const FieldWrapper = ({
+    label, name, required = true, children,
+  }: { label: string; name: FieldKey; required?: boolean; children: React.ReactNode }) => (
+    <div>
+      <Label className="text-sm font-medium text-gray-700">
+        {label} {required && <span className="text-red-500">*</span>}
+      </Label>
+      <div className="relative mt-1.5">
+        {children}
+        {isFieldValid(name) && (
+          <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500 pointer-events-none" />
+        )}
+        {isFieldError(name) && (
+          <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-400 pointer-events-none" />
+        )}
+      </div>
+      {isFieldError(name) && (
+        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3 flex-shrink-0" />
+          {fieldErrors[name]}
+        </p>
+      )}
+    </div>
+  );
+
+  const inputCls = (name: FieldKey) =>
+    `w-full rounded-xl border bg-gray-50 focus:bg-white px-3 py-2.5 text-sm focus:outline-none pr-9 transition-colors ${
+      isFieldError(name)
+        ? "border-red-300 focus:border-red-400"
+        : isFieldValid(name)
+        ? "border-green-300 focus:border-green-400"
+        : "border-gray-200 focus:border-blue-400"
+    }`;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -131,10 +276,10 @@ export default function Checkout() {
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left */}
+            {/* ── Left column ──────────────────────────────────────────── */}
             <div className="lg:col-span-2 space-y-5">
 
-              {/* ── Shipping Address ──────────────────────────────────── */}
+              {/* Shipping Address */}
               <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
                 <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
                   <MapPin className="h-5 w-5 text-blue-600" />
@@ -142,14 +287,11 @@ export default function Checkout() {
                 </div>
 
                 <div className="p-5 space-y-4">
-                  {/* Saved addresses section */}
+                  {/* Saved addresses */}
                   {savedAddresses.length > 0 && (
                     <div>
-                      <button
-                        type="button"
-                        onClick={() => setShowSaved(v => !v)}
-                        className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 mb-3 hover:text-blue-600 transition-colors"
-                      >
+                      <button type="button" onClick={() => setShowSaved(v => !v)}
+                        className="flex items-center justify-between w-full text-sm font-semibold text-gray-700 mb-3 hover:text-blue-600 transition-colors">
                         <span className="flex items-center gap-2">
                           <CheckCircle2 className="h-4 w-4 text-blue-500" />
                           Alamat Tersimpan ({savedAddresses.length})
@@ -161,23 +303,19 @@ export default function Checkout() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                           {savedAddresses.map(addr => {
                             const Icon = LabelIcon(addr.label);
-                            const isSelected = selectedAddressId === addr.id;
+                            const isSel = selectedAddressId === addr.id;
                             return (
-                              <button
-                                key={addr.id}
-                                type="button"
-                                onClick={() => handleSelectSaved(addr.id)}
-                                className={`text-left p-4 rounded-xl border-2 transition-all w-full ${isSelected ? "border-blue-500 bg-blue-50" : "border-gray-100 hover:border-blue-200 bg-white"}`}
-                              >
+                              <button key={addr.id} type="button" onClick={() => handleSelectSaved(addr.id)}
+                                className={`text-left p-4 rounded-xl border-2 transition-all w-full ${isSel ? "border-blue-500 bg-blue-50" : "border-gray-100 hover:border-blue-200 bg-white"}`}>
                                 <div className="flex items-center justify-between mb-2">
                                   <div className="flex items-center gap-2">
-                                    <div className={`p-1.5 rounded-lg ${isSelected ? "bg-blue-100" : "bg-gray-100"}`}>
-                                      <Icon className={`h-3.5 w-3.5 ${isSelected ? "text-blue-600" : "text-gray-500"}`} />
+                                    <div className={`p-1.5 rounded-lg ${isSel ? "bg-blue-100" : "bg-gray-100"}`}>
+                                      <Icon className={`h-3.5 w-3.5 ${isSel ? "text-blue-600" : "text-gray-500"}`} />
                                     </div>
-                                    <span className={`text-sm font-semibold ${isSelected ? "text-blue-700" : "text-gray-800"}`}>{addr.label}</span>
+                                    <span className={`text-sm font-semibold ${isSel ? "text-blue-700" : "text-gray-800"}`}>{addr.label}</span>
                                     {addr.isDefault && <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full font-semibold">Utama</span>}
                                   </div>
-                                  {isSelected && <CheckCircle2 className="h-4 w-4 text-blue-500 flex-shrink-0" />}
+                                  {isSel && <CheckCircle2 className="h-4 w-4 text-blue-500 flex-shrink-0" />}
                                 </div>
                                 <p className="text-sm font-medium text-gray-900">{addr.fullName}</p>
                                 <p className="text-xs text-gray-400 mt-0.5">{addr.phone}</p>
@@ -185,25 +323,17 @@ export default function Checkout() {
                               </button>
                             );
                           })}
-
-                          {/* Add new address shortcut */}
-                          <button
-                            type="button"
-                            onClick={() => navigate("/account?tab=addresses")}
-                            className="text-left p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-blue-500 min-h-[100px]"
-                          >
+                          <button type="button" onClick={() => navigate("/account?tab=addresses")}
+                            className="text-left p-4 rounded-xl border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all flex flex-col items-center justify-center gap-2 text-gray-400 hover:text-blue-500 min-h-[100px]">
                             <Plus className="h-5 w-5" />
                             <span className="text-xs font-medium">Tambah Alamat Baru</span>
                           </button>
                         </div>
                       )}
 
-                      {/* Toggle manual form */}
-                      <button
-                        type="button"
+                      <button type="button"
                         onClick={() => { setShowManual(v => !v); if (!showManual) setSelectedAddressId(null); }}
-                        className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-                      >
+                        className="text-sm text-blue-600 hover:underline flex items-center gap-1">
                         {showManual ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
                         {showManual ? "Sembunyikan form manual" : "Isi alamat manual"}
                       </button>
@@ -219,38 +349,62 @@ export default function Checkout() {
                           <p className="text-xs text-amber-700">Mengedit alamat tersimpan — perubahan hanya berlaku untuk pesanan ini</p>
                         </div>
                       )}
+
+                      {/* fullName */}
                       <div className="md:col-span-2">
-                        <Label className="text-sm font-medium text-gray-700">Nama Lengkap *</Label>
-                        <Input name="fullName" value={shippingData.fullName} onChange={handleInput} required className="mt-1.5 rounded-xl border-gray-200 bg-gray-50 focus:bg-white" />
+                        <FieldWrapper label="Nama Lengkap" name="fullName">
+                          <input name="fullName" value={shippingData.fullName} onChange={handleInput}
+                            placeholder="Nama penerima" className={inputCls("fullName")} />
+                        </FieldWrapper>
                       </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Nomor Telepon *</Label>
-                        <Input name="phone" type="tel" placeholder="08xxxxxxxxxx" value={shippingData.phone} onChange={handleInput} required className="mt-1.5 rounded-xl border-gray-200 bg-gray-50 focus:bg-white" />
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Kode Pos *</Label>
-                        <Input name="postalCode" value={shippingData.postalCode} onChange={handleInput} required className="mt-1.5 rounded-xl border-gray-200 bg-gray-50 focus:bg-white" />
-                      </div>
+
+                      {/* phone */}
+                      <FieldWrapper label="Nomor Telepon" name="phone">
+                        <input name="phone" type="tel" value={shippingData.phone} onChange={handleInput}
+                          placeholder="08xxxxxxxxxx" className={inputCls("phone")} />
+                      </FieldWrapper>
+
+                      {/* postalCode */}
+                      <FieldWrapper label="Kode Pos" name="postalCode">
+                        <input name="postalCode" value={shippingData.postalCode} onChange={handleInput}
+                          placeholder="12345" maxLength={5} className={inputCls("postalCode")} />
+                      </FieldWrapper>
+
+                      {/* address */}
                       <div className="md:col-span-2">
-                        <Label className="text-sm font-medium text-gray-700">Alamat Lengkap *</Label>
-                        <Textarea name="address" rows={3} placeholder="Jalan, nomor rumah, RT/RW" value={shippingData.address} onChange={handleInput} required className="mt-1.5 rounded-xl border-gray-200 bg-gray-50 focus:bg-white resize-none" />
+                        <FieldWrapper label="Alamat Lengkap" name="address">
+                          <textarea name="address" rows={3} value={shippingData.address} onChange={handleInput}
+                            placeholder="Jalan, nomor rumah, RT/RW, kelurahan, kecamatan"
+                            className={`${inputCls("address")} resize-none`} />
+                        </FieldWrapper>
                       </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Kota/Kabupaten *</Label>
-                        <Input name="city" value={shippingData.city} onChange={handleInput} required className="mt-1.5 rounded-xl border-gray-200 bg-gray-50 focus:bg-white" />
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium text-gray-700">Provinsi *</Label>
-                        <Input name="province" value={shippingData.province} onChange={handleInput} required className="mt-1.5 rounded-xl border-gray-200 bg-gray-50 focus:bg-white" />
-                      </div>
+
+                      {/* city */}
+                      <FieldWrapper label="Kota/Kabupaten" name="city">
+                        <input name="city" value={shippingData.city} onChange={handleInput}
+                          placeholder="Purbalingga" className={inputCls("city")} />
+                      </FieldWrapper>
+
+                      {/* province — dropdown */}
+                      <FieldWrapper label="Provinsi" name="province">
+                        <select name="province" value={shippingData.province} onChange={handleInput}
+                          className={`${inputCls("province")} appearance-none cursor-pointer`}>
+                          <option value="">-- Pilih Provinsi --</option>
+                          {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
+                        </select>
+                      </FieldWrapper>
+
+                      {/* notes */}
                       <div className="md:col-span-2">
                         <Label className="text-sm font-medium text-gray-700">Catatan (Opsional)</Label>
-                        <Textarea name="notes" rows={2} placeholder="Catatan untuk kurir atau penjual" value={shippingData.notes} onChange={handleInput} className="mt-1.5 rounded-xl border-gray-200 bg-gray-50 focus:bg-white resize-none" />
+                        <textarea name="notes" rows={2} value={shippingData.notes} onChange={handleInput}
+                          placeholder="Catatan untuk kurir atau penjual"
+                          className="mt-1.5 w-full rounded-xl border border-gray-200 bg-gray-50 focus:bg-white px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400 resize-none transition-colors" />
                       </div>
                     </div>
                   )}
 
-                  {/* Selected address summary (when saved is chosen and manual is hidden) */}
+                  {/* Saved address summary */}
                   {selectedAddressId && !showManual && (() => {
                     const addr = savedAddresses.find(a => a.id === selectedAddressId);
                     if (!addr) return null;
@@ -268,7 +422,7 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {/* ── Coupon ────────────────────────────────────────────── */}
+              {/* Coupon */}
               <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
                 <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
                   <Ticket className="h-5 w-5 text-blue-600" />
@@ -277,19 +431,12 @@ export default function Checkout() {
                 <div className="p-5">
                   {!appliedCoupon ? (
                     <div className="flex gap-2">
-                      <input
-                        value={couponInput}
-                        onChange={e => setCouponInput(e.target.value.toUpperCase())}
+                      <input value={couponInput} onChange={e => setCouponInput(e.target.value.toUpperCase())}
                         onKeyDown={e => e.key === "Enter" && handleApplyCoupon()}
                         placeholder="Masukkan kode kupon..."
-                        className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono uppercase tracking-wider focus:outline-none focus:border-blue-400 bg-gray-50 focus:bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleApplyCoupon}
-                        disabled={!couponInput.trim()}
-                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors"
-                      >
+                        className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono uppercase tracking-wider focus:outline-none focus:border-blue-400 bg-gray-50 focus:bg-white" />
+                      <button type="button" onClick={handleApplyCoupon} disabled={!couponInput.trim()}
+                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors">
                         Pakai
                       </button>
                     </div>
@@ -298,17 +445,12 @@ export default function Checkout() {
                       <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-bold text-green-800 font-mono">{appliedCoupon.code}</p>
-                        <p className="text-xs text-green-600 mt-0.5">
-                          {appliedCoupon.description || `Hemat ${fmt(discountAmount)}`}
-                        </p>
+                        <p className="text-xs text-green-600 mt-0.5">{appliedCoupon.description || `Hemat ${fmt(discountAmount)}`}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-sm font-bold text-green-700">−{fmt(discountAmount)}</p>
-                        <button
-                          type="button"
-                          onClick={handleRemoveCoupon}
-                          className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-0.5 mt-0.5 ml-auto transition-colors"
-                        >
+                        <button type="button" onClick={() => { setAppliedCoupon(null); setCouponInput(""); }}
+                          className="text-xs text-gray-400 hover:text-red-500 flex items-center gap-0.5 mt-0.5 ml-auto transition-colors">
                           <X className="h-3 w-3" /> Hapus
                         </button>
                       </div>
@@ -317,7 +459,7 @@ export default function Checkout() {
                 </div>
               </div>
 
-              {/* ── Payment ───────────────────────────────────────────── */}
+              {/* Payment */}
               <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
                 <div className="flex items-center gap-2 px-6 py-4 border-b border-gray-100">
                   <CreditCard className="h-5 w-5 text-blue-600" />
@@ -343,7 +485,7 @@ export default function Checkout() {
               </div>
             </div>
 
-            {/* Right — summary */}
+            {/* ── Right column — summary ────────────────────────────────── */}
             <div className="lg:col-span-1">
               <div className="bg-white border border-gray-100 rounded-2xl shadow-sm p-5 sticky top-20">
                 <h2 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -352,8 +494,8 @@ export default function Checkout() {
                   {isBuyNow && <span className="ml-auto text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full font-semibold">Beli Sekarang</span>}
                 </h2>
 
-                <div className="space-y-3 mb-5 max-h-56 overflow-y-auto">
-                  {activeItems.map((item) => (
+                <div className="space-y-3 mb-5 max-h-48 overflow-y-auto">
+                  {activeItems.map(item => (
                     <div key={item.id} className="flex gap-3">
                       <img src={item.image} alt={item.name} className="w-14 h-14 object-cover rounded-xl flex-shrink-0 border border-gray-100" />
                       <div className="flex-1 min-w-0">
@@ -365,9 +507,18 @@ export default function Checkout() {
                   ))}
                 </div>
 
-                <div className="border-t border-gray-100 pt-4 space-y-2.5 text-sm">
+                {/* Price breakdown */}
+                <div className="border-t border-gray-100 pt-4 space-y-2 text-sm">
                   <div className="flex justify-between text-gray-600">
-                    <span>Subtotal</span><span className="font-medium text-gray-900">{fmt(subtotal)}</span>
+                    <span>Subtotal</span>
+                    <span className="font-medium text-gray-900">{fmt(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <Percent className="h-3 w-3 text-gray-400" />
+                      Biaya Layanan ({serviceFeeRate}%)
+                    </span>
+                    <span className="font-medium text-gray-900">{fmt(serviceFee)}</span>
                   </div>
                   <div className="flex justify-between text-gray-600">
                     <span>Ongkos Kirim</span>
@@ -378,8 +529,7 @@ export default function Checkout() {
                   {appliedCoupon && discountAmount > 0 && (
                     <div className="flex justify-between text-green-600">
                       <span className="flex items-center gap-1.5">
-                        <Ticket className="h-3.5 w-3.5" />
-                        Diskon Kupon ({appliedCoupon.code})
+                        <Ticket className="h-3.5 w-3.5" /> Diskon ({appliedCoupon.code})
                       </span>
                       <span className="font-semibold">−{fmt(discountAmount)}</span>
                     </div>
@@ -392,15 +542,24 @@ export default function Checkout() {
 
                 <button
                   type="submit"
-                  className={`w-full mt-5 h-12 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-colors shadow-sm ${
-                    isBuyNow
+                  disabled={!isFormValid}
+                  className={`w-full mt-5 h-12 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-all shadow-sm ${
+                    !isFormValid
+                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      : isBuyNow
                       ? "bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white shadow-orange-200"
                       : "bg-blue-600 hover:bg-blue-500 text-white shadow-blue-200"
                   }`}
                 >
                   {isBuyNow ? <Zap className="h-4 w-4" /> : <Package className="h-4 w-4" />}
-                  {isBuyNow ? "Bayar Sekarang" : "Buat Pesanan"}
+                  {!isFormValid ? "Lengkapi Data Pengiriman" : isBuyNow ? "Bayar Sekarang" : "Lanjut ke Pembayaran"}
                 </button>
+
+                {!isFormValid && (
+                  <p className="text-xs text-amber-600 text-center mt-2 flex items-center justify-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> Isi semua field alamat dengan benar
+                  </p>
+                )}
 
                 <p className="text-xs text-gray-400 text-center mt-3">
                   Dengan melanjutkan, Anda menyetujui syarat dan ketentuan kami

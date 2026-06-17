@@ -13,6 +13,7 @@ import { StockProvider } from "./context/StockContext";
 import { SellerProductProvider } from "./context/SellerProductContext";
 import { AddressProvider } from "./context/AddressContext";
 import { CouponProvider } from "./context/CouponContext";
+import { SubscriptionProvider } from "./context/SubscriptionContext";
 import { router } from "./routes";
 import { useEffect } from "react";
 import { initializeSellers } from "./data/sellers";
@@ -24,6 +25,7 @@ function AppInit({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <SubscriptionProvider>
     <CouponProvider>
     <AddressProvider>
     <AuthProvider>
@@ -57,5 +59,6 @@ export default function App() {
     </AuthProvider>
     </AddressProvider>
     </CouponProvider>
+    </SubscriptionProvider>
   );
 }

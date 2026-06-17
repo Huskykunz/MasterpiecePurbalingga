@@ -46,6 +46,8 @@ export interface Seller {
   rating: number;
   totalSales: number;
   responseRate: number;
+  subscriptionPlan?: "free" | "silver";
+  subscriptionExpiry?: string | null;
 }
 
 export interface CartItem extends Product {
@@ -69,6 +71,12 @@ export interface Order {
   userId: string;
   items: CartItem[];
   total: number;
+  // Fee breakdown (optional for backward-compat with existing orders in localStorage)
+  subtotal?: number;
+  serviceFee?: number;
+  serviceFeeRate?: number; // 10 or 5
+  shippingCost?: number;
+  discountAmount?: number;
   status: "pending" | "processing" | "shipped" | "delivered" | "cancelled";
   shippingAddress: ShippingAddress;
   paymentMethod: string;

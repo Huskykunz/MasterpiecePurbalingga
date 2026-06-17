@@ -18,9 +18,19 @@ import {
   Star, Package, Send, Plus, X, Check, Clock,
   Store, BarChart2, Bell, TrendingUp, TrendingDown, Award, ShoppingCart,
   Pencil, Trash2, Search, ImageIcon, Tag, Layers, AlertTriangle,
-  MapPin, Home, Briefcase, Building2, CheckCircle2
+  MapPin, Home, Briefcase, Building2, CheckCircle2, Crown
 } from "lucide-react";
 import { ReturnRequest } from "../types";
+
+// ── Promo form type ───────────────────────────────────────────────────────
+interface PromoForm {
+  productId: string;
+  discountType: "percentage" | "fixed";
+  discountValue: string;
+  label: string;
+  expiresAt: string; // date input value "YYYY-MM-DD"
+  expiresTime: string; // time input value "HH:MM"
+}
 
 type Tab =
   | "profile"
@@ -34,7 +44,8 @@ type Tab =
   | "seller-reviews"
   | "seller-chat"
   | "seller-restock"
-  | "seller-returns";
+  | "seller-returns"
+  | "seller-promo";
 
 const formatRp = (n: number) => `Rp ${n.toLocaleString("id-ID")}`;
 const formatDate = (s: string) => new Date(s).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
@@ -59,6 +70,11 @@ export default function AccountPage() {
   const [addrForm, setAddrForm] = useState<AddrForm>(emptyAddr);
   const [addrDeleteConfirm, setAddrDeleteConfirm] = useState<{ id: string; label: string } | null>(null);
   const [restockQty, setRestockQty] = useState<Record<string, number>>({});
+
+  // Promo management state
+  const emptyPromoForm: PromoForm = { productId: "none", discountType: "percentage", discountValue: "", label: "", expiresAt: "", expiresTime: "23:59" };
+  const [promoForm, setPromoForm] = useState<PromoForm>(emptyPromoForm);
+  const [promoEditId, setPromoEditId] = useState<string | null>(null); // productId being edited
 
   // Product management state
   type ProductForm = { name: string; description: string; price: string; category: string; image: string; stock: string; };
@@ -200,6 +216,7 @@ export default function AccountPage() {
     { tab: "seller-products", label: "Produk Saya", icon: Package },
     { tab: "seller-reviews", label: "Ulasan Pembeli", icon: Star, count: sellerAllReviews.length },
     { tab: "seller-chat", label: "Chat Pembeli", icon: MessageCircle, count: myConversations.reduce((s, c) => s + c.unreadCount, 0) },
+    { tab: "seller-promo", label: "Manajemen Promo", icon: Tag },
     { tab: "seller-restock", label: "Restock", icon: RefreshCw, count: myRestocks.filter(r => r.status === "pending").length },
     { tab: "seller-returns", label: "Retur Masuk", icon: RotateCcw, count: myReturns.filter(r => r.status === "pending").length },
   ];
@@ -276,6 +293,14 @@ export default function AccountPage() {
                 </button>
               ))}
               <div className="border-t border-gray-100 pt-1 mt-1">
+                {isSeller && (
+                  <button
+                    onClick={() => navigate("/subscription")}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-amber-600 hover:bg-amber-50 transition-colors font-medium"
+                  >
+                    <Crown className="h-4 w-4" /> Kelola Langganan
+                  </button>
+                )}
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm text-red-500 hover:bg-red-50 transition-colors"
@@ -986,6 +1011,319 @@ export default function AccountPage() {
                 )}
               </div>
             </div>
+            );
+          })()}
+
+          {/* ===== SELLER PROMO TAB ===== */}
+          {activeTab === "seller-promo" && (() => {
+            const fmt = (n: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
+            const activePromos = sellerProducts.filter(p => p.discount);
+            const noPromos = sellerProducts.filter(p => !p.discount);
+
+            const quickPcts = [10, 15, 20, 25, 30, 50];
+
+            const handleSavePromo = () => {
+              if (!promoForm.productId || promoForm.productId === "none") { toast.error("Pilih produk terlebih dahulu"); return; }
+              if (!promoForm.discountValue || isNaN(Number(promoForm.discountValue)) || Number(promoForm.discountValue) <= 0) { toast.error("Masukkan nilai diskon yang valid"); return; }
+              if (!promoForm.expiresAt) { toast.error("Pilih tanggal berakhirnya promo"); return; }
+
+              const isoExpiry = new Date(`${promoForm.expiresAt}T${promoForm.expiresTime || "23:59"}:00`).toISOString();
+              updateProduct(promoForm.productId, {
+                discount: {
+                  type: promoForm.discountType,
+                  value: Number(promoForm.discountValue),
+                  label: promoForm.label || undefined,
+                  expiresAt: isoExpiry,
+                },
+              });
+              toast.success("Promo berhasil disimpan!", { description: `Berlaku hingga ${new Date(isoExpiry).toLocaleDateString("id-ID", { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}` });
+              setPromoForm(emptyPromoForm);
+              setPromoEditId(null);
+            };
+
+            const handleRemovePromo = (productId: string) => {
+              updateProduct(productId, { discount: undefined });
+              toast.success("Promo berhasil dihapus");
+            };
+
+            const handleEditPromo = (productId: string) => {
+              const p = sellerProducts.find(x => x.id === productId);
+              if (!p?.discount) return;
+              const d = p.discount;
+              const exp = d.expiresAt ? new Date(d.expiresAt) : null;
+              setPromoForm({
+                productId,
+                discountType: d.type,
+                discountValue: String(d.value),
+                label: d.label || "",
+                expiresAt: exp ? exp.toISOString().slice(0, 10) : "",
+                expiresTime: exp ? `${String(exp.getHours()).padStart(2,"0")}:${String(exp.getMinutes()).padStart(2,"0")}` : "23:59",
+              });
+              setPromoEditId(productId);
+            };
+
+            const today = new Date().toISOString().slice(0, 10);
+
+            return (
+              <div className="space-y-5">
+                {/* ── Form buat/edit promo ── */}
+                <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100">
+                    <Tag className="h-4 w-4 text-blue-600" />
+                    <h2 className="font-bold text-gray-900">{promoEditId ? "Edit Promo" : "Buat Promo Baru"}</h2>
+                  </div>
+                  <div className="p-5 space-y-4">
+                    {/* Pilih produk */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1.5">Pilih Produk *</label>
+                      <select
+                        value={promoForm.productId}
+                        onChange={e => setPromoForm(f => ({ ...f, productId: e.target.value }))}
+                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-400"
+                      >
+                        <option value="none" disabled>-- Pilih Produk --</option>
+                        {sellerProducts.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {p.discount ? "✓ (sudah ada promo)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Tipe diskon */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Tipe Diskon</label>
+                        <div className="flex gap-2">
+                          {([["percentage", "Persentase (%)"], ["fixed", "Nominal (Rp)"]] as const).map(([val, lbl]) => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setPromoForm(f => ({ ...f, discountType: val }))}
+                              className={`flex-1 py-2 rounded-xl text-sm font-medium border-2 transition-colors ${promoForm.discountType === val ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                            >
+                              {lbl}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Nilai diskon */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                          Nilai {promoForm.discountType === "percentage" ? "(%)" : "(Rp)"} *
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            value={promoForm.discountValue}
+                            onChange={e => setPromoForm(f => ({ ...f, discountValue: e.target.value }))}
+                            placeholder={promoForm.discountType === "percentage" ? "20" : "25000"}
+                            min="1"
+                            max={promoForm.discountType === "percentage" ? "100" : undefined}
+                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-400 pr-12"
+                          />
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                            {promoForm.discountType === "percentage" ? "%" : "Rp"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick pct buttons */}
+                    {promoForm.discountType === "percentage" && (
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-2">Pilih cepat:</label>
+                        <div className="flex flex-wrap gap-2">
+                          {quickPcts.map(pct => (
+                            <button
+                              key={pct}
+                              type="button"
+                              onClick={() => setPromoForm(f => ({ ...f, discountValue: String(pct) }))}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${promoForm.discountValue === String(pct) ? "bg-blue-600 text-white border-blue-600" : "bg-gray-100 text-gray-700 border-gray-200 hover:border-blue-300 hover:bg-blue-50"}`}
+                            >
+                              {pct}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Label promo */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Label Promo (opsional)</label>
+                        <input
+                          type="text"
+                          value={promoForm.label}
+                          onChange={e => setPromoForm(f => ({ ...f, label: e.target.value }))}
+                          placeholder="Contoh: Flash Sale, Promo Lebaran"
+                          className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-400"
+                        />
+                      </div>
+
+                      {/* Tenggat waktu */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1.5">Tenggat Waktu *</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="date"
+                            value={promoForm.expiresAt}
+                            min={today}
+                            onChange={e => setPromoForm(f => ({ ...f, expiresAt: e.target.value }))}
+                            className="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-400"
+                          />
+                          <input
+                            type="time"
+                            value={promoForm.expiresTime}
+                            onChange={e => setPromoForm(f => ({ ...f, expiresTime: e.target.value }))}
+                            className="w-24 border border-gray-200 rounded-xl px-2 py-2.5 text-sm bg-gray-50 focus:bg-white focus:outline-none focus:border-blue-400"
+                          />
+                        </div>
+                        {promoForm.expiresAt && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            Berakhir: {new Date(`${promoForm.expiresAt}T${promoForm.expiresTime}`).toLocaleDateString("id-ID", { weekday: "short", day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Preview */}
+                    {promoForm.productId !== "none" && promoForm.discountValue && (() => {
+                      const p = sellerProducts.find(x => x.id === promoForm.productId);
+                      if (!p) return null;
+                      const val = Number(promoForm.discountValue);
+                      const discounted = promoForm.discountType === "percentage"
+                        ? Math.round(p.price * (1 - val / 100))
+                        : Math.max(0, p.price - val);
+                      return (
+                        <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-blue-600 font-medium">Preview Diskon</p>
+                            <p className="text-sm text-gray-700 mt-0.5">{p.name}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-base font-bold text-blue-700">{fmt(discounted)}</p>
+                            <p className="text-xs text-gray-400 line-through">{fmt(p.price)}</p>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    <div className="flex gap-3 pt-1">
+                      {promoEditId && (
+                        <button
+                          type="button"
+                          onClick={() => { setPromoForm(emptyPromoForm); setPromoEditId(null); }}
+                          className="px-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50"
+                        >
+                          Batal Edit
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={handleSavePromo}
+                        className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2"
+                      >
+                        <Tag className="h-4 w-4" />
+                        {promoEditId ? "Simpan Perubahan" : "Aktifkan Promo"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Daftar promo aktif ── */}
+                <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                    <h2 className="font-bold text-gray-900">Promo Aktif</h2>
+                    <span className="text-sm text-gray-400">{activePromos.length} promo</span>
+                  </div>
+                  {activePromos.length === 0 ? (
+                    <div className="p-12 text-center text-gray-400">
+                      <Tag className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                      <p className="text-sm">Belum ada promo aktif.</p>
+                      <p className="text-xs mt-1">Buat promo di form di atas.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+                      {activePromos.map(product => {
+                        const d = product.discount!;
+                        const isExpired = d.expiresAt ? new Date(d.expiresAt) < new Date() : false;
+                        const expStr = d.expiresAt
+                          ? new Date(d.expiresAt).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                          : null;
+                        const discountedPrice = d.type === "percentage"
+                          ? Math.round(product.price * (1 - d.value / 100))
+                          : Math.max(0, product.price - d.value);
+
+                        return (
+                          <div key={product.id} className="flex items-center gap-4 p-4 hover:bg-gray-50/60 transition-colors">
+                            <img src={product.image} alt={product.name} className="w-12 h-12 object-cover rounded-xl border border-gray-100 flex-shrink-0" />
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm text-gray-900 truncate">{product.name}</p>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isExpired ? "bg-red-100 text-red-600" : "bg-green-100 text-green-700"}`}>
+                                  {isExpired ? "Expired" : (d.label || (d.type === "percentage" ? `${d.value}% OFF` : `Hemat ${fmt(d.value)}`))}
+                                </span>
+                                <span className="text-xs text-gray-400">
+                                  {fmt(discountedPrice)} <span className="line-through">{fmt(product.price)}</span>
+                                </span>
+                              </div>
+                              {expStr && (
+                                <p className={`text-xs mt-0.5 ${isExpired ? "text-red-400" : "text-gray-400"}`}>
+                                  {isExpired ? "Berakhir: " : "Sampai: "}{expStr}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-1.5 flex-shrink-0">
+                              <button
+                                onClick={() => handleEditPromo(product.id)}
+                                className="p-2 rounded-xl text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                title="Edit promo"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => handleRemovePromo(product.id)}
+                                className="p-2 rounded-xl text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                title="Hapus promo"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Produk tanpa promo ── */}
+                {noPromos.length > 0 && (
+                  <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+                      <h2 className="font-bold text-gray-900 text-sm text-gray-500">Produk Tanpa Promo ({noPromos.length})</h2>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      {noPromos.map(product => (
+                        <div key={product.id} className="flex items-center gap-4 p-4 hover:bg-gray-50/60 transition-colors">
+                          <img src={product.image} alt={product.name} className="w-10 h-10 object-cover rounded-xl border border-gray-100 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm text-gray-900 truncate">{product.name}</p>
+                            <p className="text-xs text-gray-400">{formatRp(product.price)}</p>
+                          </div>
+                          <button
+                            onClick={() => setPromoForm(f => ({ ...f, productId: product.id }))}
+                            className="text-xs text-blue-600 hover:underline flex-shrink-0"
+                          >
+                            + Buat Promo
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })()}
 

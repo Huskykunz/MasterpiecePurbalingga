@@ -1,11 +1,12 @@
 import { Link } from "react-router";
 import { Button } from "../components/ui/button";
 import { useProducts } from "../hooks/useProducts";
+import { useSubscription } from "../context/SubscriptionContext";
 import { ProductCard } from "../components/ProductCard";
-import { ArrowRight, Star, Shield, HeadphonesIcon, ChevronLeft, ChevronRight, Sparkles, Store, TrendingUp, Users, BarChart2 } from "lucide-react";
+import { ArrowRight, Star, Shield, HeadphonesIcon, ChevronLeft, ChevronRight, ChevronDown, Sparkles, Store, TrendingUp, Users, BarChart2 } from "lucide-react";
 import { AIChatbot } from "../components/AIChatbot";
 import { useAuth } from "../context/AuthContext";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import useEmblaCarousel from "embla-carousel-react";
 import Autoplay from "embla-carousel-autoplay";
 import { Card, CardContent } from "../components/ui/card";
@@ -41,10 +42,61 @@ export default function Home() {
   const { user } = useAuth();
   const isSeller = user?.role === "craftsman";
   const allProducts = useProducts();
-  const featuredProducts = allProducts
-    .filter(p => p.inStock)
-    .sort((a, b) => (b.rating || 0) - (a.rating || 0))
-    .slice(0, 4);
+  const { getSellerPlan } = useSubscription();
+
+  // ── Featured product selection: silver first, then free ──────────────────
+  const inStock = allProducts.filter(p => p.inStock);
+
+  const silverProducts = inStock.filter(p => p.sellerId && getSellerPlan(p.sellerId) === "silver");
+  const freeProducts   = inStock.filter(p => !p.sellerId || getSellerPlan(p.sellerId) === "free");
+
+  // Silver fills up to 4 slots (max 2 per seller), free fills the rest by rating
+  const buildFeatured = (pool: typeof inStock) => {
+    const silver = pool.filter(p => p.sellerId && getSellerPlan(p.sellerId) === "silver");
+    const free   = pool.filter(p => !p.sellerId || getSellerPlan(p.sellerId) === "free")
+                       .sort((a, b) => (b.rating || 0) - (a.rating || 0));
+
+    const result: { product: typeof inStock[0]; isSilver: boolean }[] = [];
+    const silverSeen: Record<string, number> = {};
+    for (const p of silver) {
+      if (result.length >= 4) break;
+      const sid = p.sellerId || "";
+      if ((silverSeen[sid] ?? 0) < 2) {
+        result.push({ product: p, isSilver: true });
+        silverSeen[sid] = (silverSeen[sid] ?? 0) + 1;
+      }
+    }
+    for (const p of free) {
+      if (result.length >= 4) break;
+      result.push({ product: p, isSilver: false });
+    }
+    return result.slice(0, 4);
+  };
+
+  const featuredProducts = buildFeatured(inStock);
+
+  // ── Home category filter + custom dropdown ────────────────────────────
+  const [homeCategory, setHomeCategory] = useState("Semua");
+  const [homeCatOpen, setHomeCatOpen] = useState(false);
+  const homeCatRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (homeCatRef.current && !homeCatRef.current.contains(e.target as Node)) {
+        setHomeCatOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Derive sorted category list from the full product catalogue
+  const homeCategories = Array.from(new Set(allProducts.map(p => p.category))).sort();
+
+  // When a category is active, apply the same silver-first logic within that category
+  const homeFeatured = homeCategory === "Semua"
+    ? featuredProducts
+    : buildFeatured(inStock.filter(p => p.category === homeCategory));
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true }, [Autoplay({ delay: 5000 })]);
 
   const scrollPrev = useCallback(() => {
@@ -226,30 +278,96 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Featured Products Section */}
+      {/* Featured Products Section with category filter */}
       <section className="py-16 bg-[#0d0f14]">
         <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between mb-10">
-            <div>
+          {/* Header + controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-8">
+            <div className="flex-1">
               <h2 className="text-3xl font-bold text-white mb-1">Sistem Knalpot Unggulan</h2>
-              <p className="text-gray-500">Pilihan terbaik dari koleksi premium kami</p>
+              <p className="text-gray-500">
+                {homeCategory === "Semua"
+                  ? "Pilihan terbaik dari koleksi premium kami"
+                  : `Menampilkan kategori: ${homeCategory}`}
+              </p>
             </div>
-            <Link to="/shop">
-              <Button variant="outline" size="lg" className="border-white/15 text-gray-300 hover:bg-white/10 hover:text-white bg-transparent">
-                Lihat Semua
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </Link>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredProducts.map((product, index) => (
-              <div
-                key={product.id}
-                className="opacity-0 animate-fade-in"
-                style={{ animationDelay: `${index * 100}ms`, animationFillMode: "forwards" }}
-              >
-                <ProductCard product={product} dark />
+            <div className="flex items-center gap-3 flex-shrink-0">
+              {/* Custom dropdown — label updates dynamically via state */}
+              <div className="relative" ref={homeCatRef}>
+                <button
+                  type="button"
+                  onClick={() => setHomeCatOpen(v => !v)}
+                  className="flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/20 text-gray-200 text-sm rounded-xl pl-4 pr-3 py-2 transition-colors min-w-[150px] justify-between"
+                >
+                  <span className="truncate">
+                    {homeCategory === "Semua" ? "Semua Kategori" : homeCategory}
+                  </span>
+                  <ChevronDown className={`h-3.5 w-3.5 flex-shrink-0 text-gray-400 transition-transform ${homeCatOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {homeCatOpen && (
+                  <div className="absolute top-full mt-1.5 right-0 bg-[#1c1f27] border border-white/10 rounded-2xl shadow-2xl py-2 z-50 min-w-[180px] max-h-60 overflow-y-auto">
+                    {["Semua", ...homeCategories].map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => { setHomeCategory(cat); setHomeCatOpen(false); }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${
+                          homeCategory === cat
+                            ? "text-blue-400 font-semibold bg-white/5"
+                            : "text-gray-300 hover:bg-white/5 hover:text-white"
+                        }`}
+                      >
+                        {cat === "Semua" ? "Semua Kategori" : cat}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
+
+              <Link to="/shop">
+                <Button variant="outline" size="sm" className="border-white/15 text-gray-300 hover:bg-white/10 hover:text-white bg-transparent">
+                  Lihat Semua <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+
+          {/* Product grid — re-renders whenever homeCategory changes */}
+          {homeFeatured.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {homeFeatured.map(({ product, isSilver }, index) => (
+                <div
+                  key={`${product.id}-${homeCategory}`}
+                  className="opacity-0 animate-fade-in"
+                  style={{ animationDelay: `${index * 100}ms`, animationFillMode: "forwards" }}
+                >
+                  <ProductCard product={product} dark silverFeatured={isSilver} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12 bg-white/5 rounded-2xl border border-white/10">
+              <p className="text-gray-400">Tidak ada produk dalam kategori ini.</p>
+              <button onClick={() => setHomeCategory("Semua")} className="mt-2 text-sm text-blue-400 hover:underline">
+                Lihat semua kategori
+              </button>
+            </div>
+          )}
+
+          {/* Category pills */}
+          <div className="flex items-center gap-2 mt-6 overflow-x-auto scrollbar-hide pb-1">
+            {["Semua", ...homeCategories].map(cat => (
+              <button
+                key={cat}
+                onClick={() => setHomeCategory(cat)}
+                className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                  homeCategory === cat
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "border-white/15 text-gray-400 hover:border-white/30 hover:text-gray-200"
+                }`}
+              >
+                {cat === "Semua" ? "Semua" : cat}
+              </button>
             ))}
           </div>
         </div>

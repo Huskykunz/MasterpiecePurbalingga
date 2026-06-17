@@ -1,5 +1,11 @@
 import { Seller } from "../types";
 
+const in30Days = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  return d.toISOString();
+};
+
 export const sellers: Seller[] = [
   {
     id: "seller-1",
@@ -14,6 +20,8 @@ export const sellers: Seller[] = [
     rating: 4.8,
     totalSales: 342,
     responseRate: 98,
+    subscriptionPlan: "silver",
+    subscriptionExpiry: in30Days(),
   },
   {
     id: "seller-2",
@@ -28,6 +36,8 @@ export const sellers: Seller[] = [
     rating: 4.9,
     totalSales: 578,
     responseRate: 95,
+    subscriptionPlan: "silver",
+    subscriptionExpiry: in30Days(),
   },
   {
     id: "seller-3",
@@ -42,6 +52,8 @@ export const sellers: Seller[] = [
     rating: 4.7,
     totalSales: 189,
     responseRate: 92,
+    subscriptionPlan: "free",
+    subscriptionExpiry: null,
   },
 ];
 

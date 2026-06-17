@@ -44,6 +44,12 @@ export function formatRp(n: number): string {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", minimumFractionDigits: 0 }).format(n);
 }
 
+/** Admin fee: 10% if subtotal < Rp 1.000.000, else 5% */
+export function calcAdminFee(subtotal: number): { fee: number; rate: number } {
+  const rate = subtotal < 1_000_000 ? 10 : 5;
+  return { fee: Math.round(subtotal * rate / 100), rate };
+}
+
 export function generateSKU(category: string, existingCount: number = 0): string {
   const abbr = category.slice(0, 3).toUpperCase();
   const num = String(existingCount + 1).padStart(3, "0");

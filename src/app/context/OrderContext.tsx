@@ -37,7 +37,14 @@ const CANCEL_WINDOW = 10 * 60_000; // 10 minutes after order creation
 
 interface OrderContextType {
   orders: Order[];
-  createOrder: (userId: string, items: CartItem[], total: number, shippingAddress: ShippingAddress, paymentMethod: string) => Order;
+  createOrder: (
+    userId: string,
+    items: CartItem[],
+    total: number,
+    shippingAddress: ShippingAddress,
+    paymentMethod: string,
+    breakdown?: { subtotal: number; serviceFee: number; serviceFeeRate: number; shippingCost: number; discountAmount: number }
+  ) => Order;
   getUserOrders: (userId: string) => Order[];
   getSellerOrders: (sellerId: string) => Order[];
   getOrder: (orderId: string) => Order | undefined;
@@ -141,7 +148,8 @@ export function OrderProvider({ children }: { children: ReactNode }) {
 
   const createOrder = (
     userId: string, items: CartItem[], total: number,
-    shippingAddress: ShippingAddress, paymentMethod: string
+    shippingAddress: ShippingAddress, paymentMethod: string,
+    breakdown?: { subtotal: number; serviceFee: number; serviceFeeRate: number; shippingCost: number; discountAmount: number }
   ): Order => {
     // ── Stock availability check ───────────────────────────────────
     if (externalCheckStock) {
@@ -156,6 +164,7 @@ export function OrderProvider({ children }: { children: ReactNode }) {
       id: `ORD-${Date.now()}`,
       userId, items, total, status: "pending",
       shippingAddress, paymentMethod,
+      ...(breakdown ?? {}),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useReviews } from "../context/ReviewContext";
+import { useSubscription } from "../context/SubscriptionContext";
 import { StarRating } from "./StarRating";
 import { ShoppingCart, Check, Zap, Layers } from "lucide-react";
 import { Badge } from "./ui/badge";
@@ -13,13 +14,28 @@ import { getDiscountedPrice, formatRp } from "../utils/priceUtils";
 interface ProductCardProps {
   product: Product;
   dark?: boolean;
+  /** Highlight border for featured silver products on the home page */
+  silverFeatured?: boolean;
 }
 
-export function ProductCard({ product, dark = false }: ProductCardProps) {
+export function ProductCard({ product, dark = false, silverFeatured = false }: ProductCardProps) {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const { isAuthenticated, user } = useAuth();
   const { getProductRating } = useReviews();
+  const { getSellerPlan } = useSubscription();
+
+  const sellerPlan = product.sellerId ? getSellerPlan(product.sellerId) : "free";
+
+  // Plan badge — only Silver gets a badge
+  const PlanBadge = () => {
+    if (sellerPlan === "silver") return (
+      <span className="absolute top-2 left-2 z-10 bg-gray-300 text-gray-700 text-[10px] font-bold px-2 py-0.5 rounded-full shadow">
+        Silver
+      </span>
+    );
+    return null;
+  };
   const { average, count } = getProductRating(product.id);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -43,11 +59,12 @@ export function ProductCard({ product, dark = false }: ProductCardProps) {
 
   if (dark) {
     return (
-      <div className="group relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl overflow-hidden hover:bg-white/8 hover:-translate-y-1.5 hover:border-white/20 transition-all duration-300 flex flex-col">
+      <div className={`group relative bg-white/5 backdrop-blur-sm rounded-2xl overflow-hidden hover:bg-white/8 hover:-translate-y-1.5 transition-all duration-300 flex flex-col border-2 ${silverFeatured ? "border-gray-400/50 shadow-md hover:border-gray-300" : "border-white/10 hover:border-white/20"}`}>
         <Link to={`/product/${product.id}`}>
           <div className="aspect-square overflow-hidden relative">
             <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+            <PlanBadge />
             {!product.inStock && (
               <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                 <span className="text-white text-sm font-semibold bg-red-500/80 px-3 py-1 rounded-full">Stok Habis</span>
@@ -127,10 +144,11 @@ export function ProductCard({ product, dark = false }: ProductCardProps) {
   }
 
   return (
-    <div className="group bg-white rounded-2xl overflow-hidden border border-gray-100 hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col">
+    <div className={`group bg-white rounded-2xl overflow-hidden hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 flex flex-col border-2 ${silverFeatured ? "border-gray-400/40 shadow-sm" : "border-gray-100 hover:border-gray-200"}`}>
       <Link to={`/product/${product.id}`}>
         <div className="aspect-square overflow-hidden bg-gray-50 relative">
           <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <PlanBadge />
           {!product.inStock && (
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
               <span className="text-white text-sm font-semibold bg-red-500/80 px-3 py-1 rounded-full">Stok Habis</span>
