@@ -4,7 +4,7 @@ import {
   Package, Briefcase, ChevronDown, MessageCircle,
   RotateCcw, Info, Phone, Sparkles
 } from "lucide-react";
-import logoMP from "@/imports/MP_logo.png";
+import logoMP from "../../imports/MP_logo.png";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { useState, useRef, useEffect } from "react";
@@ -55,6 +55,9 @@ export function Header() {
             src={logoMP}
             alt="Masterpiece Purbalingga"
             className="flex-shrink-0 h-9 w-auto object-contain rounded-md"
+            style={{
+              filter: "drop-shadow(0 0 8px rgba(59,130,246,0.85)) drop-shadow(0 0 18px rgba(96,165,250,0.55))",
+            }}
           />
           <span className="text-blue-400 font-semibold text-sm tracking-wide hidden sm:block">
             Masterpiece <span className="text-blue-400">Purbalingga</span>
@@ -99,11 +102,11 @@ export function Header() {
 
         {/* Right side — right column */}
         <div className="flex items-center gap-1.5 justify-self-end">
-          {/* Cart */}
-          <Link to="/cart" className="relative p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+          {/* Cart — desktop only (mobile shows it beside the hamburger) */}
+          <Link to="/cart" className="relative p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors hidden md:flex">
             <ShoppingCart className="h-5 w-5" />
             {getItemCount() > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 bg-blue-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center leading-none">
+              <span className="absolute -top-0.5 -right-0.5 bg-[#E60000] text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center leading-none">
                 {getItemCount()}
               </span>
             )}
@@ -163,64 +166,106 @@ export function Header() {
             </Link>
           )}
 
-          {/* Mobile hamburger */}
-          <button
-            className="md:hidden p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
-            onClick={() => setMobileOpen((v) => !v)}
-          >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
+          {/* Mobile: cart + hamburger grouped on the right */}
+          <div className="md:hidden flex items-center gap-1">
+            <Link to="/cart" className="relative p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
+              <ShoppingCart className="h-5 w-5" />
+              {getItemCount() > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 bg-[#E60000] text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center leading-none">
+                  {getItemCount()}
+                </span>
+              )}
+            </Link>
+            <button
+              className="p-2 text-gray-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+              onClick={() => setMobileOpen((v) => !v)}
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile drawer — two-column layout: nav links left, account/checkout right */}
       {mobileOpen && (
         <div className="md:hidden border-t border-white/5 bg-[#0d1b2e]">
-          <div className="container mx-auto px-4 py-3 flex flex-col gap-0.5">
-            {[
-              { to: "/", label: "Beranda" },
-              { to: "/shop", label: "Toko" },
-              { to: "/ai-visualizer", label: "Visualisasi AI" },
-              { to: "/about", label: "Tentang" },
-              { to: "/contact", label: "Kontak" },
-            ].map(({ to, label }) => (
-              <Link key={to} to={to} className={`px-3 py-2.5 rounded-lg text-sm transition-colors ${location.pathname === to ? "bg-white/10 text-white" : "text-gray-400 hover:text-white hover:bg-white/5"}`}>
-                {label}
-              </Link>
-            ))}
+          <div className="container mx-auto px-3 py-3">
+            <div className="flex gap-3">
+              {/* Left column — page navigation */}
+              <div className="flex-1 flex flex-col gap-0.5">
+                <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest px-3 mb-1">Menu</p>
+                {[
+                  { to: "/", label: "Beranda" },
+                  { to: "/shop", label: "Toko" },
+                  { to: "/ai-visualizer", label: "Visualisasi AI" },
+                  { to: "/about", label: "Tentang" },
+                  { to: "/contact", label: "Kontak" },
+                ].map(({ to, label }) => (
+                  <Link key={to} to={to}
+                    className={`px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === to ? "bg-white/10 text-white font-medium" : "text-gray-400 hover:text-white hover:bg-white/5"}`}>
+                    {label}
+                  </Link>
+                ))}
+              </div>
 
-            <div className="border-t border-white/10 mt-2 pt-2 space-y-0.5">
-              {isAuthenticated && user ? (
-                <>
-                  <div className="flex items-center gap-3 px-3 py-2 mb-1">
-                    <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
-                      {user.name.charAt(0).toUpperCase()}
+              {/* Divider */}
+              <div className="w-px bg-white/10 flex-shrink-0" />
+
+              {/* Right column — account + checkout actions */}
+              <div className="flex-1 flex flex-col gap-0.5">
+                <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest px-3 mb-1">Akun</p>
+
+                {isAuthenticated && user ? (
+                  <>
+                    <div className="flex items-center gap-2 px-3 py-2 mb-0.5">
+                      <div className="w-7 h-7 rounded-full bg-[#E60000] flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                        {user.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-white text-xs font-semibold truncate">{user.name}</p>
+                        <p className="text-gray-500 text-[10px]">{user.role === "craftsman" ? "Penjual" : "Pembeli"}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-white text-sm font-medium">{user.name}</p>
-                      <p className="text-gray-500 text-xs">{user.role === "craftsman" ? "Penjual" : "Pembeli"}</p>
-                    </div>
-                  </div>
-                  {[
-                    { to: "/account", label: "Akun Saya", icon: User },
-                    { to: "/account?tab=orders", label: "Pesanan", icon: Package },
-                    { to: "/account?tab=chat", label: "Chat", icon: MessageCircle },
-                    { to: "/account?tab=returns", label: "Pengembalian", icon: RotateCcw },
-                    ...(user.role !== "craftsman" ? [{ to: "/seller-signup", label: "Jual di Sini", icon: Briefcase }] : []),
-                  ].map(({ to, label, icon: Icon }) => (
-                    <Link key={to} to={to} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
-                      <Icon className="h-4 w-4" /> {label}
+                    {[
+                      { to: "/account", label: "Akun Saya", icon: User },
+                      { to: "/cart", label: "Keranjang", icon: ShoppingCart },
+                      { to: "/checkout", label: "Checkout", icon: Package },
+                      { to: "/account?tab=orders", label: "Pesanan", icon: Package },
+                      ...(user.role !== "craftsman" ? [{ to: "/seller-signup", label: "Jual di Sini", icon: Briefcase }] : []),
+                    ].map(({ to, label, icon: Icon }) => (
+                      <Link key={to} to={to}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white hover:bg-white/5 transition-colors">
+                        <Icon className="h-3.5 w-3.5" /> {label}
+                      </Link>
+                    ))}
+                    <button onClick={handleLogout}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-400 hover:bg-white/5 w-full transition-colors mt-1">
+                      <LogOut className="h-3.5 w-3.5" /> Keluar
+                    </button>
+                  </>
+                ) : (
+                  <div className="flex flex-col gap-2 px-2 pt-1">
+                    <Link to="/login"
+                      className="flex items-center justify-center gap-2 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition-colors">
+                      <User className="h-4 w-4" /> Masuk
                     </Link>
-                  ))}
-                  <button onClick={handleLogout} className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-red-400 hover:bg-white/5 w-full transition-colors">
-                    <LogOut className="h-4 w-4" /> Keluar
-                  </button>
-                </>
-              ) : (
-                <Link to="/login" className="flex items-center justify-center gap-2 mx-3 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-medium text-sm transition-colors">
-                  <User className="h-4 w-4" /> Masuk / Daftar
-                </Link>
-              )}
+                    <Link to="/cart"
+                      className="flex items-center justify-center gap-2 py-2 rounded-lg border border-white/15 text-gray-300 hover:bg-white/5 text-sm transition-colors">
+                      <ShoppingCart className="h-4 w-4" />
+                      Keranjang
+                      {getItemCount() > 0 && (
+                        <span className="bg-[#E60000] text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center">
+                          {getItemCount()}
+                        </span>
+                      )}
+                    </Link>
+                    <Link to="/checkout"
+                      className="flex items-center justify-center gap-2 py-2 rounded-lg bg-[#E60000] hover:bg-[#CC0000] text-white font-medium text-sm transition-colors">
+                      <Package className="h-4 w-4" /> Checkout
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>

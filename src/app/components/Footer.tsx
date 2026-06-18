@@ -1,5 +1,6 @@
 import { Link } from "react-router";
-import { Store, Mail, Phone, MapPin, Facebook, Instagram, Twitter } from "lucide-react";
+import { Mail, Phone, MapPin, Facebook, Instagram, Twitter } from "lucide-react";
+import logoMP from "../../imports/MP_logo.png";
 
 export function Footer() {
   return (
@@ -8,9 +9,16 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand Section */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Store className="h-6 w-6 text-blue-400" />
-              <span className="text-white font-semibold">Masterpiece Purbalingga</span>
+            <div className="flex items-center gap-2.5">
+              <img
+                src={logoMP}
+                alt="Masterpiece Purbalingga"
+                className="h-8 w-auto object-contain rounded-md"
+                style={{
+                  filter: "drop-shadow(0 0 8px rgba(59,130,246,0.85)) drop-shadow(0 0 18px rgba(96,165,250,0.55))",
+                }}
+              />
+              <span className="text-blue-400 font-semibold">Masterpiece Purbalingga</span>
             </div>
             <p className="text-sm">
               Destinasi Anda untuk sistem knalpot motor berkualitas dari Purbalingga. Mendukung pengrajin lokal dan melestarikan keahlian tradisional.
