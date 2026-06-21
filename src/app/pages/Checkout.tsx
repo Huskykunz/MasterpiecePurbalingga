@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, memo } from "react";
 import { useNavigate, Navigate, useLocation } from "react-router";
 import { useAuth } from "../context/AuthContext";
 import { useCart } from "../context/CartContext";
@@ -81,6 +81,47 @@ const validators: Record<FieldKey, (v: string) => string | null> = {
     return null;
   },
 };
+
+// ── FieldWrapper lives OUTSIDE Checkout so React never remounts inputs ────────
+interface FieldWrapperProps {
+  label: string;
+  name: FieldKey;
+  required?: boolean;
+  isValid: boolean;
+  isError: boolean;
+  errorMsg?: string | null;
+  children: React.ReactNode;
+}
+
+const FieldWrapper = memo(function FieldWrapper({
+  label, name, required = true, isValid, isError, errorMsg, children,
+}: FieldWrapperProps) {
+  return (
+    <div>
+      <Label className="text-sm font-medium text-gray-700">
+        {label} {required && <span className="text-red-500">*</span>}
+      </Label>
+      <div className="relative mt-1.5">
+        {children}
+        {isValid && <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500 pointer-events-none" />}
+        {isError && <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-400 pointer-events-none" />}
+      </div>
+      {isError && errorMsg && (
+        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3 flex-shrink-0" /> {errorMsg}
+        </p>
+      )}
+    </div>
+  );
+});
+
+function getInputCls(isError: boolean, isValid: boolean): string {
+  return `w-full rounded-xl border bg-gray-50 focus:bg-white px-3 py-2.5 text-sm focus:outline-none pr-9 transition-colors ${
+    isError  ? "border-red-300 focus:border-red-400"
+    : isValid ? "border-green-300 focus:border-green-400"
+    : "border-gray-200 focus:border-blue-400"
+  }`;
+}
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -220,40 +261,13 @@ export default function Checkout() {
 
   const LabelIcon = (label: string) => label === "Kantor" ? Building2 : Home;
 
-  // ── Field wrapper helper ───────────────────────────────────────────────────
-  const FieldWrapper = ({
-    label, name, required = true, children,
-  }: { label: string; name: FieldKey; required?: boolean; children: React.ReactNode }) => (
-    <div>
-      <Label className="text-sm font-medium text-gray-700">
-        {label} {required && <span className="text-red-500">*</span>}
-      </Label>
-      <div className="relative mt-1.5">
-        {children}
-        {isFieldValid(name) && (
-          <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500 pointer-events-none" />
-        )}
-        {isFieldError(name) && (
-          <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-400 pointer-events-none" />
-        )}
-      </div>
-      {isFieldError(name) && (
-        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-          <AlertCircle className="h-3 w-3 flex-shrink-0" />
-          {fieldErrors[name]}
-        </p>
-      )}
-    </div>
-  );
-
-  const inputCls = (name: FieldKey) =>
-    `w-full rounded-xl border bg-gray-50 focus:bg-white px-3 py-2.5 text-sm focus:outline-none pr-9 transition-colors ${
-      isFieldError(name)
-        ? "border-red-300 focus:border-red-400"
-        : isFieldValid(name)
-        ? "border-green-300 focus:border-green-400"
-        : "border-gray-200 focus:border-blue-400"
-    }`;
+  // Helpers that use component state — kept stable via derived values passed to FieldWrapper
+  const fw = (name: FieldKey) => ({
+    name,
+    isValid: isFieldValid(name),
+    isError: isFieldError(name),
+    errorMsg: fieldErrors[name],
+  });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -352,43 +366,43 @@ export default function Checkout() {
 
                       {/* fullName */}
                       <div className="md:col-span-2">
-                        <FieldWrapper label="Nama Lengkap" name="fullName">
+                        <FieldWrapper label="Nama Lengkap" required {...fw("fullName")}>
                           <input name="fullName" value={shippingData.fullName} onChange={handleInput}
-                            placeholder="Nama penerima" className={inputCls("fullName")} />
+                            placeholder="Nama penerima" className={getInputCls(fw("fullName").isError, fw("fullName").isValid)} />
                         </FieldWrapper>
                       </div>
 
                       {/* phone */}
-                      <FieldWrapper label="Nomor Telepon" name="phone">
+                      <FieldWrapper label="Nomor Telepon" required {...fw("phone")}>
                         <input name="phone" type="tel" value={shippingData.phone} onChange={handleInput}
-                          placeholder="08xxxxxxxxxx" className={inputCls("phone")} />
+                          placeholder="08xxxxxxxxxx" className={getInputCls(fw("phone").isError, fw("phone").isValid)} />
                       </FieldWrapper>
 
                       {/* postalCode */}
-                      <FieldWrapper label="Kode Pos" name="postalCode">
+                      <FieldWrapper label="Kode Pos" required {...fw("postalCode")}>
                         <input name="postalCode" value={shippingData.postalCode} onChange={handleInput}
-                          placeholder="12345" maxLength={5} className={inputCls("postalCode")} />
+                          placeholder="12345" maxLength={5} className={getInputCls(fw("postalCode").isError, fw("postalCode").isValid)} />
                       </FieldWrapper>
 
                       {/* address */}
                       <div className="md:col-span-2">
-                        <FieldWrapper label="Alamat Lengkap" name="address">
+                        <FieldWrapper label="Alamat Lengkap" required {...fw("address")}>
                           <textarea name="address" rows={3} value={shippingData.address} onChange={handleInput}
                             placeholder="Jalan, nomor rumah, RT/RW, kelurahan, kecamatan"
-                            className={`${inputCls("address")} resize-none`} />
+                            className={`${getInputCls(fw("address").isError, fw("address").isValid)} resize-none`} />
                         </FieldWrapper>
                       </div>
 
                       {/* city */}
-                      <FieldWrapper label="Kota/Kabupaten" name="city">
+                      <FieldWrapper label="Kota/Kabupaten" required {...fw("city")}>
                         <input name="city" value={shippingData.city} onChange={handleInput}
-                          placeholder="Purbalingga" className={inputCls("city")} />
+                          placeholder="Purbalingga" className={getInputCls(fw("city").isError, fw("city").isValid)} />
                       </FieldWrapper>
 
                       {/* province — dropdown */}
-                      <FieldWrapper label="Provinsi" name="province">
+                      <FieldWrapper label="Provinsi" required {...fw("province")}>
                         <select name="province" value={shippingData.province} onChange={handleInput}
-                          className={`${inputCls("province")} appearance-none cursor-pointer`}>
+                          className={`${getInputCls(fw("province").isError, fw("province").isValid)} appearance-none cursor-pointer`}>
                           <option value="">-- Pilih Provinsi --</option>
                           {PROVINCES.map(p => <option key={p} value={p}>{p}</option>)}
                         </select>

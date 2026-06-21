@@ -831,7 +831,7 @@ export default function DesignVisualizer() {
           </button>
 
           <a
-            href="/contact"
+            href="/customer-service"
             className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm text-black hover:brightness-110 transition-all ml-auto"
             style={{ background: "linear-gradient(135deg, #f97316, #ea580c)" }}
           >

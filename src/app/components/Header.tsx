@@ -2,13 +2,59 @@ import { Link, useNavigate, useLocation } from "react-router";
 import {
   ShoppingCart, Menu, X, User, LogOut,
   Package, Briefcase, ChevronDown, MessageCircle,
-  RotateCcw, Info, Phone, Sparkles
+  RotateCcw, Info, Phone, Sparkles, Search, Headphones, HelpCircle
 } from "lucide-react";
 import logoMP from "../../imports/MP_logo.png";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { toast } from "sonner";
+
+// ── InfoDropdown — stable component with its own search state ─────────────
+const INFO_ITEMS = [
+  { to: "/about",            icon: Info,           label: "Tentang Kami" },
+  { to: "/contact",          icon: Phone,          label: "Kontak" },
+  { to: "/customer-service", icon: Headphones,     label: "Customer Service" },
+  { to: "/faq",              icon: HelpCircle,     label: "FAQ & Bantuan" },
+];
+
+const InfoDropdown = memo(function InfoDropdown({ onClose }: { onClose: () => void }) {
+  const [q, setQ] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const filtered = INFO_ITEMS.filter(it => it.label.toLowerCase().includes(q.toLowerCase()));
+
+  return (
+    <div className="absolute top-full mt-2 left-0 bg-[#1c1f27] border border-white/10 rounded-2xl shadow-2xl z-50 w-56 overflow-hidden">
+      {/* Search */}
+      <div className="px-3 pt-3 pb-2">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-500 pointer-events-none" />
+          <input
+            ref={inputRef}
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            placeholder="Cari bantuan..."
+            className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-white/20 focus:bg-white/10 transition-colors"
+          />
+        </div>
+      </div>
+      {/* Items */}
+      <div className="pb-2">
+        {filtered.length === 0 ? (
+          <p className="px-4 py-3 text-xs text-gray-500 text-center">Tidak ditemukan</p>
+        ) : filtered.map(({ to, icon: Icon, label }) => (
+          <Link key={to} to={to} onClick={onClose}
+            className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
+            <Icon className="h-3.5 w-3.5 text-gray-500" /> {label}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+});
 
 export function Header() {
   const { getItemCount } = useCart();
@@ -88,14 +134,7 @@ export function Header() {
               Info <ChevronDown className={`h-3.5 w-3.5 transition-transform duration-200 ${infoDropOpen ? "rotate-180" : ""}`} />
             </button>
             {infoDropOpen && (
-              <div className="absolute top-full mt-2 left-0 bg-[#1c1f27] border border-white/10 rounded-xl shadow-2xl py-1.5 w-40 z-50">
-                <Link to="/about" onClick={() => setInfoDropOpen(false)} className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
-                  <Info className="h-3.5 w-3.5 text-gray-500" /> Tentang
-                </Link>
-                <Link to="/contact" onClick={() => setInfoDropOpen(false)} className="flex items-center gap-2.5 px-4 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 transition-colors">
-                  <Phone className="h-3.5 w-3.5 text-gray-500" /> Kontak
-                </Link>
-              </div>
+              <InfoDropdown onClose={() => setInfoDropOpen(false)} />
             )}
           </div>
         </nav>
@@ -191,9 +230,9 @@ export function Header() {
         <div className="md:hidden border-t border-white/5 bg-[#0d1b2e]">
           <div className="container mx-auto px-3 py-3">
             <div className="flex gap-3">
-              {/* Left column — page navigation */}
-              <div className="flex-1 flex flex-col gap-0.5">
-                <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest px-3 mb-1">Menu</p>
+              {/* Left column — page navigation (items right-aligned) */}
+              <div className="flex-1 flex flex-col gap-0.5 items-end">
+                <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-widest px-3 mb-1 self-end">Menu</p>
                 {[
                   { to: "/", label: "Beranda" },
                   { to: "/shop", label: "Toko" },
@@ -202,7 +241,7 @@ export function Header() {
                   { to: "/contact", label: "Kontak" },
                 ].map(({ to, label }) => (
                   <Link key={to} to={to}
-                    className={`px-3 py-2 rounded-lg text-sm transition-colors ${location.pathname === to ? "bg-white/10 text-white font-medium" : "text-gray-400 hover:text-white hover:bg-white/5"}`}>
+                    className={`px-3 py-2 rounded-lg text-sm transition-colors text-right w-full ${location.pathname === to ? "bg-white/10 text-white font-medium" : "text-gray-400 hover:text-white hover:bg-white/5"}`}>
                     {label}
                   </Link>
                 ))}

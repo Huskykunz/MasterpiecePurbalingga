@@ -22,6 +22,7 @@ import SellerSignup from "./pages/SellerSignup";
 import AccountPage from "./pages/AccountPage";
 import Invoice from "./pages/Invoice";
 import SubscriptionPage from "./pages/SubscriptionPage";
+import CustomerService from "./pages/CustomerService";
 import NotFound from "./pages/NotFound";
 
 // ── Role-based guard ─────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ export const router = createBrowserRouter([
       { path: "account", Component: AccountPage },
       { path: "invoice/:orderId", Component: Invoice },
       { path: "subscription", Component: SubscriptionPage },
+      { path: "customer-service", Component: CustomerService },
       { path: "complaint", Component: Complaint },
       { path: "complaints", Component: Complaints },
       { path: "ai-visualizer", Component: DesignVisualizer },
